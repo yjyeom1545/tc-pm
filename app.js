@@ -12,7 +12,10 @@ const monthEnd = m => { const [y, mo] = m.split('-').map(Number); const d = new 
 function toast(msg, err) { const t = $('#toast'); t.textContent = msg; t.className = 'toast' + (err ? ' err' : ''); clearTimeout(t._h); t._h = setTimeout(() => t.classList.add('hide'), err ? 6000 : 2500); }
 
 const sb = supabase.createClient(TCPM_CONFIG.url, TCPM_CONFIG.key);
-const S = { user: null, prof: null, items: [], itemMap: {}, prices: [], master: null, editId: null, recent: [], list: [], closeRes: null };
+const S = { user: null, prof: null, items: [], itemMap: {}, prices: [], master: null, editId: null, recent: [], list: [], closeRes: null, vendors: [], vendor: null, view: 'reg' };
+const LSV = 'tcpm_vendor';
+const vItems = () => S.items.filter(i => i.vendor === S.vendor);
+const curVendor = () => S.vendors.find(v => v.name === S.vendor) || {};
 
 /* ================= 인증 ================= */
 let lmode = 'in';
@@ -71,11 +74,16 @@ function show(v) { $('#vLogin').classList.toggle('hide', v !== 'login'); $('#vPe
 
 /* ================= 기준정보 로드 ================= */
 async function loadRefs() {
-  const [it, pr, cf] = await Promise.all([
+  const [it, pr, cf, vd] = await Promise.all([
     sb.from('pm_items').select('*').order('sort'),
     sb.from('pm_prices').select('*').order('valid_from', { ascending: false }),
-    sb.from('pm_config').select('*').eq('id', 'master').maybeSingle()
+    sb.from('pm_config').select('*').eq('id', 'master').maybeSingle(),
+    sb.from('pm_vendors').select('*').order('sort')
   ]);
+  S.vendors = vd.data || [];
+  const act = S.vendors.filter(v => v.active);
+  if (!S.vendor) { let saved = null; try { saved = localStorage.getItem(LSV); } catch (e) {} S.vendor = (act.find(v => v.name === saved) || act[0] || { name: '대림에스앤티' }).name; }
+  $('#vendorSel').innerHTML = act.map(v => `<option ${v.name === S.vendor ? 'selected' : ''}>${esc(v.name)}</option>`).join('');
   S.items = it.data || []; S.itemMap = Object.fromEntries(S.items.map(i => [i.code, i]));
   S.prices = pr.data || [];
   S.master = (cf.data && cf.data.data) || JSON.parse(JSON.stringify(Recon.DEFAULT_MASTER));
@@ -97,9 +105,15 @@ const SUB = {
   users: '<b>사용자</b> · 계정 승인 및 권한'
 };
 $('#nav').onclick = e => { const v = e.target.dataset.v; if (v) go(v); };
+function setVendor(v) {
+  if (v === S.vendor) return; S.vendor = v; try { localStorage.setItem(LSV, v); } catch (e) {}
+  $('#vendorSel').value = v; S.closeRes = null; selItem = null; resetForm(); initItemFilters(); renderEmpty();
+  if (C.erp) showErpInfo();
+}
+$('#vendorSel').onchange = () => { setVendor($('#vendorSel').value); go(S.view); };
 function go(v) {
   if (!SUB[v] || (v === 'users' && S.prof.role !== 'admin')) v = 'reg';
-  location.hash = v;
+  location.hash = v; S.view = v;
   $$('#nav a').forEach(a => a.classList.toggle('on', a.dataset.v === v));
   $$('main > section').forEach(s => s.classList.toggle('hide', s.id !== 'v-' + v));
   $('#subnav').innerHTML = SUB[v];
@@ -110,14 +124,15 @@ function initViews() {
   if (inited) return; inited = true;
   $('#rDate').value = today(); $('#lMonth').value = thisMonth(); $('#cMonth').value = prevMonthIfEarly();
   resetForm();
-  $('#lItem').innerHTML = '<option value="">품목: 전체</option>' + S.items.map(i => `<option value="${esc(i.code)}">${esc(i.name)}</option>`).join('');
+  initItemFilters();
 }
 function prevMonthIfEarly() { return new Date().getDate() <= 15 ? prevMonth() : thisMonth(); }
 
 /* ================= 입고 등록 ================= */
 function itemOptions(sel) {
-  const cats = [...new Set(S.items.filter(i => i.active || i.code === sel).map(i => i.category))];
-  return '<option value="">품목 선택</option>' + cats.map(c => `<optgroup label="${esc(c)}">` + S.items.filter(i => i.category === c && (i.active || i.code === sel)).map(i => `<option value="${esc(i.code)}" ${i.code === sel ? 'selected' : ''}>${esc(i.name)}</option>`).join('') + '</optgroup>').join('');
+  const pool = vItems().filter(i => i.active || i.code === sel);
+  const cats = [...new Set(pool.map(i => i.category))];
+  return '<option value="">품목 선택</option>' + cats.map(c => `<optgroup label="${esc(c)}">` + pool.filter(i => i.category === c).map(i => `<option value="${esc(i.code)}" ${i.code === sel ? 'selected' : ''}>${esc(i.name)}${i.erp_part && !i.name.includes(i.erp_part) ? ' · ' + esc(i.erp_part) : ''}</option>`).join('') + '</optgroup>').join('');
 }
 function addLine(l = {}) {
   const tr = document.createElement('tr');
@@ -159,13 +174,13 @@ async function checkPO() {
   if (!po) { m.innerHTML = ''; return false; }
   if (!/^PO\d{8}$/.test(po)) { m.innerHTML = '<span class="err">형식: PO + 숫자 8자리 (예: PO26100001)</span>'; return false; }
   const d = $('#rDate').value, yymm = d ? d.slice(2, 4) + d.slice(5, 7) : '';
-  const { data } = await sb.from('pm_receipts').select('id,recv_date,created_by_name').eq('po', po).maybeSingle();
-  if (data && data.id !== S.editId) { m.innerHTML = `<span class="err">이미 등록된 P/O 입니다 — ${esc(data.recv_date)} · ${esc(data.created_by_name || '')}</span>`; return false; }
+  const { data } = await sb.from('pm_receipts').select('id,recv_date,vendor,created_by_name').eq('po', po).maybeSingle();
+  if (data && data.id !== S.editId) { m.innerHTML = `<span class="err">이미 등록된 P/O 입니다 — ${esc(data.vendor)} · ${esc(data.recv_date)} · ${esc(data.created_by_name || '')}</span>`; return false; }
   if (yymm && po.slice(2, 6) !== yymm) { m.innerHTML = `<span class="tag t-warn">확인</span> P/O 월(${po.slice(2, 4)}년 ${po.slice(4, 6)}월)과 입고일 월이 다릅니다`; return true; }
   m.innerHTML = '<span class="ok">사용 가능한 P/O</span>'; return true;
 }
 function resetForm() {
-  S.editId = null; $('#regTitle').textContent = '입고 등록';
+  S.editId = null; $('#regTitle').textContent = '입고 등록 — ' + (S.vendor || '');
   $('#rPO').value = ''; $('#rPre').checked = false; $('#rNote').value = ''; $('#poMsg').innerHTML = ''; $('#rMsg').textContent = '';
   if (!$('#rDate').value) $('#rDate').value = today();
   $('#rLines tbody').innerHTML = ''; addLine();
@@ -182,7 +197,7 @@ $('#rSave').onclick = async () => {
   const dup = lines.map(l => l.code).filter((c, i, a) => a.indexOf(c) !== i);
   if (dup.length) return toast('같은 품목이 두 줄 있습니다 — 수량을 합쳐 주세요', 1);
   $('#rSave').disabled = true;
-  const head = { po: $('#rPO').value, recv_date: $('#rDate').value, pre_reg: $('#rPre').checked, note: $('#rNote').value.trim() || null };
+  const head = { po: $('#rPO').value, recv_date: $('#rDate').value, vendor: S.vendor, pre_reg: $('#rPre').checked, note: $('#rNote').value.trim() || null };
   let error = null;
   if (!S.editId) {
     ({ error } = await sb.rpc('pm_new_receipt', { p: { ...head, lines } }));
@@ -194,7 +209,7 @@ $('#rSave').onclick = async () => {
   }
   $('#rSave').disabled = false;
   if (error) return toast(krErr(error.message), 1);
-  toast((S.editId ? '수정' : '저장') + ' 완료 · ' + $('#rPO').value + ' · ' + $('#rTotal').textContent + '원');
+  toast((S.editId ? '수정' : '저장') + ' 완료 · ' + S.vendor + ' · ' + $('#rPO').value + ' · ' + $('#rTotal').textContent + '원');
   const keepDate = $('#rDate').value; resetForm(); $('#rDate').value = keepDate; $('#rPO').focus();
   loadRecent();
 };
@@ -203,13 +218,13 @@ async function fetchReceipts(q) {
   if (error) { toast(krErr(error.message), 1); return []; }
   return (data || []).map(r => { const lines = r.pm_receipt_lines || []; return { ...r, lines, amount: lines.reduce((s, l) => s + Number(l.amount), 0) }; });
 }
-const SEL = 'id,po,recv_date,pre_reg,note,created_by,created_by_name,created_at,updated_at,pm_receipt_lines(code,qty,unit_price,amount,price_overridden)';
+const SEL = 'id,po,recv_date,vendor,pre_reg,note,created_by,created_by_name,created_at,updated_at,pm_receipt_lines(code,qty,unit_price,amount,price_overridden)';
 async function loadRecent() {
-  S.recent = await fetchReceipts(sb.from('pm_receipts').select(SEL).order('created_at', { ascending: false }).limit(20));
+  S.recent = await fetchReceipts(sb.from('pm_receipts').select(SEL).eq('vendor', S.vendor).order('created_at', { ascending: false }).limit(20));
   const t = $('#tRecent');
   t.innerHTML = '<thead><tr><th>입고일</th><th>P/O No</th><th>품목 · 수량</th><th class="num">금액</th><th>담당</th></tr></thead><tbody>' +
     (S.recent.length ? S.recent.map(r => `<tr class="clk ${r.id === S.editId ? 'sel' : ''}" data-id="${r.id}"><td class="nw">${esc(r.recv_date.slice(5))}</td><td class="nw">${esc(r.po)}${r.pre_reg ? ' <span class="tag t-date">선등록</span>' : ''}</td><td>${lineText(r)}</td><td class="num">${fmt(r.amount)}</td><td class="nw">${esc(r.created_by_name || '')}</td></tr>`).join('')
-      : '<tr class="empty"><td colspan="5">아직 등록된 입고가 없습니다</td></tr>') + '</tbody>';
+      : `<tr class="empty"><td colspan="5">${esc(S.vendor)} 등록 입고가 없습니다</td></tr>`) + '</tbody>';
   t.querySelectorAll('tr.clk').forEach(tr => tr.onclick = () => editReceipt(S.recent.find(r => r.id === tr.dataset.id)));
 }
 function lineText(r) { return r.lines.map(l => { const it = S.itemMap[l.code]; return `${esc(it ? it.name : l.code)} <b>${fmt(l.qty)}</b>${it && it.unit !== '대' ? esc(it.unit) : (it ? '대' : '')}${l.price_overridden ? ' <span class="tag t-warn">단가수정</span>' : ''}`; }).join('<br>'); }
@@ -217,8 +232,9 @@ function canEdit(r) { return S.prof.role === 'admin' || r.created_by === S.user.
 function editReceipt(r) {
   if (!r) return;
   if (!canEdit(r)) return toast('본인이 등록한 건만 수정할 수 있습니다 (관리자 제외)', 1);
+  if (r.vendor && r.vendor !== S.vendor) setVendor(r.vendor);
   go('reg');
-  S.editId = r.id; $('#regTitle').textContent = '입고 수정 — ' + r.po; $('#rSave').textContent = '수정 저장';
+  S.editId = r.id; $('#regTitle').textContent = '입고 수정 — ' + r.vendor + ' · ' + r.po; $('#rSave').textContent = '수정 저장';
   $('#rDate').value = r.recv_date; $('#rPO').value = r.po; $('#rPre').checked = r.pre_reg; $('#rNote').value = r.note || '';
   $('#rLines tbody').innerHTML = ''; r.lines.forEach(l => addLine({ code: l.code, qty: Number(l.qty), unit_price: Number(l.unit_price), overridden: l.price_overridden }));
   checkPO(); loadRecent();
@@ -229,7 +245,7 @@ function editReceipt(r) {
 $('#lText').oninput = renderList;
 async function loadList() {
   const m = $('#lMonth').value || thisMonth();
-  S.list = await fetchReceipts(sb.from('pm_receipts').select(SEL).gte('recv_date', m + '-01').lte('recv_date', monthEnd(m)).order('recv_date').order('po'));
+  S.list = await fetchReceipts(sb.from('pm_receipts').select(SEL).eq('vendor', S.vendor).gte('recv_date', m + '-01').lte('recv_date', monthEnd(m)).order('recv_date').order('po'));
   const staffs = [...new Set(S.list.map(r => r.created_by_name || ''))].sort();
   const cur = $('#lStaff').value;
   $('#lStaff').innerHTML = '<option value="">담당자: 전체</option>' + staffs.map(s => `<option ${s === cur ? 'selected' : ''}>${esc(s)}</option>`).join('');
@@ -243,7 +259,7 @@ function renderList() {
   const rows = listFiltered();
   const tot = rows.reduce((s, r) => s + r.amount, 0);
   const pre = rows.filter(r => r.pre_reg), ovr = rows.filter(r => r.lines.some(l => l.price_overridden));
-  $('#lKpi').innerHTML = `<div class="kpi"><div class="l">등록 P/O</div><div class="v">${rows.length}</div><div class="d muted">${esc($('#lMonth').value)}</div></div>
+  $('#lKpi').innerHTML = `<div class="kpi"><div class="l">등록 P/O</div><div class="v">${rows.length}</div><div class="d muted">${esc(S.vendor)} · ${esc($('#lMonth').value)}</div></div>
    <div class="kpi"><div class="l">입고 금액 합계</div><div class="v">${fmt(tot)}</div></div>
    <div class="kpi"><div class="l">선등록</div><div class="v">${pre.length}</div><div class="d muted">${fmt(pre.reduce((s, r) => s + r.amount, 0))}원</div></div>
    <div class="kpi warn"><div class="l">단가 직접 수정</div><div class="v">${ovr.length}</div><div class="d muted">단가표와 다른 단가로 입력된 건</div></div>`;
@@ -268,12 +284,12 @@ function renderList() {
       : '<tr class="empty"><td colspan="4">품목별 합계</td></tr>') + '</tbody>';
 }
 $('#lXls').onclick = () => {
-  const rows = listFiltered(); const aoa = [['입고일', 'P/O No', '선등록', '품목코드', '품목', '수량', '단위', '단가', '금액', '단가수정', '담당', '비고']];
-  rows.forEach(r => r.lines.forEach(l => { const it = S.itemMap[l.code] || {}; aoa.push([r.recv_date, r.po, r.pre_reg ? 'Y' : '', l.code, it.name || l.code, Number(l.qty), it.unit || '', Number(l.unit_price), Number(l.amount), l.price_overridden ? 'Y' : '', r.created_by_name || '', r.note || '']); }));
-  const ws = XLSX.utils.aoa_to_sheet(aoa); ws['!cols'] = [12, 13, 7, 10, 30, 9, 6, 12, 14, 8, 10, 30].map(w => ({ wch: w }));
+  const rows = listFiltered(); const aoa = [['업체', '입고일', 'P/O No', '선등록', '품목코드', '품목', '수량', '단위', '단가', '금액', '단가수정', '담당', '비고']];
+  rows.forEach(r => r.lines.forEach(l => { const it = S.itemMap[l.code] || {}; aoa.push([r.vendor, r.recv_date, r.po, r.pre_reg ? 'Y' : '', l.code, it.name || l.code, Number(l.qty), it.unit || '', Number(l.unit_price), Number(l.amount), l.price_overridden ? 'Y' : '', r.created_by_name || '', r.note || '']); }));
+  const ws = XLSX.utils.aoa_to_sheet(aoa); ws['!cols'] = [12, 12, 13, 7, 10, 30, 9, 6, 12, 14, 8, 10, 30].map(w => ({ wch: w }));
   aoa[0].forEach((h, c) => { ws[XLSX.utils.encode_cell({ r: 0, c })].s = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '1F3864' } } }; });
-  for (let r = 1; r < aoa.length; r++) [5, 7, 8].forEach(c => { const a = XLSX.utils.encode_cell({ r, c }); if (ws[a]) ws[a].z = '#,##0'; });
-  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, '입고내역'); XLSX.writeFile(wb, `입고내역_${$('#lMonth').value}.xlsx`);
+  for (let r = 1; r < aoa.length; r++) [6, 8, 9].forEach(c => { const a = XLSX.utils.encode_cell({ r, c }); if (ws[a]) ws[a].z = '#,##0'; });
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, '입고내역'); XLSX.writeFile(wb, `입고내역_${S.vendor}_${$('#lMonth').value}.xlsx`);
 };
 
 /* ================= 월 마감 ================= */
@@ -293,11 +309,10 @@ setupDrop('#dErp', async f => {
     const wb = await readFile(f); const e = Recon.parseERP(wb, XLSX);
     if (!e || !e.lines.length) throw new Error('입고상세조회 머리글(입고번호, P/O No)을 찾지 못했습니다');
     C.erp = e; C.erpName = f.name;
-    const pos = new Set(e.lines.map(l => l.po)).size, amt = e.lines.reduce((s, l) => s + l.amt, 0);
     const mc = {}; e.lines.forEach(l => { const m = (l.date || '').slice(0, 7); mc[m] = (mc[m] || 0) + 1; });
     const em = Object.keys(mc).sort((a, b) => mc[b] - mc[a])[0];
     if (em && em !== $('#cMonth').value) { $('#cMonth').value = em; await loadCloseInfo(); }
-    $('#dErp').classList.add('has'); $('#dErp .files').innerHTML = fileLine(1, f.name, `${e.lines.length}행 · P/O ${pos}건 · ${fmt(amt)}원 · ${em}`);
+    showErpInfo();
   } catch (err) { C.erp = null; $('#dErp').classList.remove('has'); $('#dErp .files').innerHTML = fileLine(0, f.name, err.message); }
   refreshClose();
 });
@@ -310,20 +325,36 @@ setupDrop('#dVen', async f => {
   refreshClose();
 });
 $('#cMonth').onchange = loadCloseInfo;
+function erpFor(vendorName) {
+  const v = S.vendors.find(x => x.name === vendorName) || {};
+  const lines = C.erp.lines.filter(l => v.erp_code ? l.vcode === String(v.erp_code) : String(l.vendor || '').replace(/\s|\(주\)|㈜/g, '').includes(vendorName.replace(/\s/g, '')));
+  return { ...C.erp, lines };
+}
+function showErpInfo() {
+  if (!C.erp) return;
+  const all = C.erp.lines, mine = erpFor(S.vendor).lines;
+  const byV = {}; all.forEach(l => { const k = (l.vendor || '?') + (l.vcode ? ' (' + l.vcode + ')' : ''); byV[k] = (byV[k] || 0) + l.amt; });
+  const pos = new Set(mine.map(l => l.po)).size, amt = mine.reduce((s, l) => s + l.amt, 0);
+  $('#dErp').classList.add('has');
+  $('#dErp .files').innerHTML = fileLine(1, C.erpName, `전체 ${all.length}행`) +
+    `<div style="margin-top:4px"><b>${esc(S.vendor)}</b> 해당: ${mine.length}행 · P/O ${pos}건 · <b>${fmt(amt)}</b>원${mine.length ? '' : ' <span class="err">— 이 업체 입고가 파일에 없습니다</span>'}</div>` +
+    (Object.keys(byV).length > 1 ? `<div class="muted">파일 내 거래처: ${Object.entries(byV).map(([k, a]) => esc(k) + ' ' + fmt(a)).join(' · ')}</div>` : '');
+  refreshClose();
+}
 async function loadCloseInfo() {
   const m = $('#cMonth').value || prevMonth(), yymm = 'PO' + m.slice(2, 4) + m.slice(5, 7);
   const [a, b, cl] = await Promise.all([
-    fetchReceipts(sb.from('pm_receipts').select(SEL).gte('recv_date', m + '-01').lte('recv_date', monthEnd(m))),
-    fetchReceipts(sb.from('pm_receipts').select(SEL).like('po', yymm + '%')),
-    sb.from('pm_closings').select('*').eq('month', m).maybeSingle()
+    fetchReceipts(sb.from('pm_receipts').select(SEL).eq('vendor', S.vendor).gte('recv_date', m + '-01').lte('recv_date', monthEnd(m))),
+    fetchReceipts(sb.from('pm_receipts').select(SEL).eq('vendor', S.vendor).like('po', yymm + '%')),
+    sb.from('pm_closings').select('*').eq('month', m).eq('vendor', S.vendor).maybeSingle()
   ]);
   const map = new Map(); [...a, ...b].forEach(r => map.set(r.id, r)); C.regs = [...map.values()];
   C.closing = cl.data;
   const tot = C.regs.reduce((s, r) => s + r.amount, 0), staffs = [...new Set(C.regs.map(r => r.created_by_name || ''))];
-  $('#cRegInfo').innerHTML = `${esc(m)} 입고 등록 <b>${C.regs.length}</b>건 · <b>${fmt(tot)}</b>원 · 담당 ${staffs.length}명`;
-  $('#cRegFiles').innerHTML = staffs.length ? staffs.map(s => { const rs = C.regs.filter(r => (r.created_by_name || '') === s); return `<div><span class="tag t-ok">DB</span> ${esc(s || '(이름 없음)')} <span class="muted">${rs.length}건 · ${fmt(rs.reduce((x, r) => x + r.amount, 0))}원</span></div>`; }).join('') : '<span class="muted">해당 월 등록 내역 없음</span>';
+  $('#cRegInfo').innerHTML = `<b>${esc(S.vendor)}</b> ${esc(m)} 입고 등록 <b>${C.regs.length}</b>건 · <b>${fmt(tot)}</b>원 · 담당 ${staffs.length}명`;
+  $('#cRegFiles').innerHTML = staffs.length ? staffs.map(s => { const rs = C.regs.filter(r => (r.created_by_name || '') === s); return `<div><span class="tag t-ok">DB</span> ${esc(s || '(이름 없음)')} <span class="muted">${rs.length}건 · ${fmt(rs.reduce((x, r) => x + r.amount, 0))}원</span></div>`; }).join('') : `<span class="muted">${esc(S.vendor)} 해당 월 등록 내역 없음</span>`;
   $('#cLockInfo').innerHTML = C.closing ? `<span class="tag ${C.closing.locked ? 't-bad' : 't-mut'}">${C.closing.locked ? '마감 확정(잠금)' : '마감 저장(잠금 해제)'}</span> ${esc(C.closing.created_by_name || '')} · ${esc(String(C.closing.created_at).slice(0, 16).replace('T', ' '))} ${S.prof.role === 'admin' && C.closing.locked ? '<button id="btnUnlock">잠금 해제</button>' : ''}` : '<span class="tag t-mut">미마감</span>';
-  const ub = $('#btnUnlock'); if (ub) ub.onclick = async () => { if (!confirm(m + ' 마감 잠금을 해제할까요? 해제하면 해당 월 입고를 다시 수정할 수 있습니다.')) return; const { error } = await sb.from('pm_closings').update({ locked: false }).eq('month', m); if (error) return toast(krErr(error.message), 1); toast('잠금 해제'); loadCloseInfo(); };
+  const ub = $('#btnUnlock'); if (ub) ub.onclick = async () => { if (!confirm(S.vendor + ' ' + m + ' 마감 잠금을 해제할까요? 해제하면 해당 월 입고를 다시 수정할 수 있습니다.')) return; const { error } = await sb.from('pm_closings').update({ locked: false }).eq('month', m).eq('vendor', S.vendor); if (error) return toast(krErr(error.message), 1); toast('잠금 해제'); loadCloseInfo(); };
   loadHist();
   refreshClose();
   if (!S.closeRes) renderEmpty();
@@ -338,14 +369,16 @@ function refreshClose() {
     $('#sheetList').innerHTML = C.ven.sheets.map(s => `<label><input type="checkbox" data-sheet="${esc(s.sheet)}" ${auto.has(s.sheet) ? 'checked' : ''}> <b>${esc(s.sheet)}</b> <span class="muted">${esc(s.title)}</span> ${idx.has(s.sum) ? `<span class="tag t-ok">INDEX "${esc(idx.get(s.sum))}" 일치</span>` : ''}<span class="sum">${s.rows.length}행 · ${fmt(s.sum)}원</span></label>`).join('');
   }
   $('#btnRun').disabled = !C.erp;
-  $('#runInfo').textContent = !C.erp ? 'ERP 입고상세조회를 넣으면 실행할 수 있습니다' : C.ven ? 'ERP · 업체 명세서 · 입고 등록 3자 대조' : 'ERP ↔ 입고 등록 대조 (업체 명세서 없음)';
+  $('#runInfo').textContent = !C.erp ? 'ERP 입고상세조회를 넣으면 실행할 수 있습니다' : `[${S.vendor}] ` + (C.ven ? 'ERP · 업체 명세서 · 입고 등록 3자 대조' : 'ERP ↔ 입고 등록 대조 (업체 명세서 없음)');
 }
 $('#btnRun').onclick = () => {
   C.sel = $$('#sheetList input:checked').map(x => x.dataset.sheet);
   const vendorSheets = C.ven ? C.ven.sheets.filter(s => C.sel.includes(s.sheet)) : [];
   const entries = C.regs.map(r => ({ file: '입고등록', sheet: r.created_by_name || '(이름 없음)', row: null, po: r.po, amt: Math.round(r.amount), date: r.recv_date, qty: r.lines.reduce((s, l) => s + Number(l.qty), 0), model: r.lines.map(l => S.itemMap[l.code]?.name || l.code).join(', ') }));
   const staff = entries.length ? [{ file: '입고등록', entries, skippedSheets: [] }] : [];
-  S.closeRes = Recon.reconcile({ erp: C.erp, vendorSheets, staff }, S.master);
+  const erpV = erpFor(S.vendor);
+  if (!erpV.lines.length) return toast(`ERP 파일에 ${S.vendor} 입고가 없습니다 (기준정보 > 업체의 거래처코드 확인)`, 1);
+  S.closeRes = Recon.reconcile({ erp: erpV, vendorSheets, staff }, S.master); S.closeRes.vendor = S.vendor;
   // 단가 수정 건 표시
   const ovr = new Set(C.regs.filter(r => r.lines.some(l => l.price_overridden)).map(r => r.po));
   S.closeRes.rows.forEach(x => { if (ovr.has(x.po)) x.issues = (x.issues ? x.issues + ' · ' : '') + '입고 등록 시 단가 직접 수정'; x.staffWhere = x.staffWhere.replace(/입고등록 \/ /g, ''); });
@@ -366,7 +399,7 @@ function renderEmpty() {
 function renderClose() {
   const r = S.closeRes, s = r.summary, d1 = s.vendorAmt - s.erpAmt, d2 = s.staffAmt - s.erpAmt;
   $('#kpis').innerHTML = `
-   <div class="kpi"><div class="l">ERP 입고 (${esc(s.month)})</div><div class="v">${fmt(s.erpAmt)}</div><div class="d muted">P/O ${s.erpPOs}건</div></div>
+   <div class="kpi"><div class="l">ERP 입고 · ${esc(r.vendor)} (${esc(s.month)})</div><div class="v">${fmt(s.erpAmt)}</div><div class="d muted">P/O ${s.erpPOs}건</div></div>
    ${s.hasVendor ? `<div class="kpi"><div class="l">업체 명세서 (선택 시트)</div><div class="v">${fmt(s.vendorAmt)}</div><div class="d ${d1 ? 'diff' : 'muted'}">ERP 대비 ${d1 > 0 ? '+' : ''}${fmt(d1)}</div></div>` : '<div class="kpi"><div class="l">업체 명세서</div><div class="v muted">미사용</div><div class="d muted">ERP ↔ 입고 등록만 대조</div></div>'}
    <div class="kpi"><div class="l">입고 등록 (ERP P/O 해당분)</div><div class="v">${fmt(s.staffAmt)}</div><div class="d ${d2 ? 'diff' : 'muted'}">P/O ${s.staffPOs}/${s.erpPOs}건 · ERP 대비 ${d2 > 0 ? '+' : ''}${fmt(d2)}</div></div>
    <div class="kpi ok"><div class="l">일치 P/O (P/O·금액)</div><div class="v">${s.ok}</div><div class="d muted">${s.dateDiff ? `날짜만 다른 P/O ${s.dateDiff}건 포함` : '날짜 차이 없음'}</div></div>
@@ -415,21 +448,22 @@ function renderStf() {
 }
 $('#tabs').onclick = e => { const t = e.target.dataset.t; if (!t) return; $$('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === t)); ['po', 'model', 'ven', 'stf', 'hist'].forEach(k => $('#t-' + k).classList.toggle('hide', k !== t)); };
 async function loadHist() {
-  const { data } = await sb.from('pm_closings').select('month,locked,erp_amt,vendor_amt,staff_amt,ok,warn,bad,date_diff,erp_file,vendor_file,created_by_name,created_at').order('month', { ascending: false }).limit(24);
-  $('#tHist').innerHTML = '<thead><tr><th>마감월</th><th>상태</th><th class="num">ERP</th><th class="num">업체</th><th class="num">입고 등록</th><th class="num">일치</th><th class="num">확인</th><th class="num">불일치</th><th class="num">날짜차이</th><th>ERP 파일</th><th>업체 파일</th><th>확정자</th><th>일시</th></tr></thead><tbody>' +
-    ((data || []).length ? data.map(h => `<tr><td>${esc(h.month)}</td><td><span class="tag ${h.locked ? 't-bad' : 't-mut'}">${h.locked ? '잠금' : '해제'}</span></td><td class="num">${fmt(h.erp_amt)}</td><td class="num">${fmt(h.vendor_amt)}</td><td class="num">${fmt(h.staff_amt)}</td><td class="num">${h.ok}</td><td class="num">${h.warn}</td><td class="num">${h.bad}</td><td class="num">${h.date_diff}</td><td class="small">${esc(h.erp_file || '')}</td><td class="small">${esc(h.vendor_file || '')}</td><td>${esc(h.created_by_name || '')}</td><td class="small nw">${esc(String(h.created_at).slice(0, 16).replace('T', ' '))}</td></tr>`).join('') : '<tr class="empty"><td colspan="13">마감 이력이 없습니다</td></tr>') + '</tbody>';
+  const { data } = await sb.from('pm_closings').select('month,vendor,locked,erp_amt,vendor_amt,staff_amt,ok,warn,bad,date_diff,erp_file,vendor_file,created_by_name,created_at').order('month', { ascending: false }).order('vendor').limit(60);
+  $('#tHist').innerHTML = '<thead><tr><th>마감월</th><th>업체</th><th>상태</th><th class="num">ERP</th><th class="num">업체</th><th class="num">입고 등록</th><th class="num">일치</th><th class="num">확인</th><th class="num">불일치</th><th class="num">날짜차이</th><th>ERP 파일</th><th>업체 파일</th><th>확정자</th><th>일시</th></tr></thead><tbody>' +
+    ((data || []).length ? data.map(h => `<tr><td>${esc(h.month)}</td><td>${esc(h.vendor)}</td><td><span class="tag ${h.locked ? 't-bad' : 't-mut'}">${h.locked ? '잠금' : '해제'}</span></td><td class="num">${fmt(h.erp_amt)}</td><td class="num">${fmt(h.vendor_amt)}</td><td class="num">${fmt(h.staff_amt)}</td><td class="num">${h.ok}</td><td class="num">${h.warn}</td><td class="num">${h.bad}</td><td class="num">${h.date_diff}</td><td class="small">${esc(h.erp_file || '')}</td><td class="small">${esc(h.vendor_file || '')}</td><td>${esc(h.created_by_name || '')}</td><td class="small nw">${esc(String(h.created_at).slice(0, 16).replace('T', ' '))}</td></tr>`).join('') : '<tr class="empty"><td colspan="14">마감 이력이 없습니다</td></tr>') + '</tbody>';
 }
 $('#btnClose').onclick = async () => {
   const r = S.closeRes, s = r.summary, m = s.month;
+  if (r.vendor !== S.vendor) return toast('업체를 바꿨습니다. 대조를 다시 실행하세요', 1);
   if (m !== $('#cMonth').value && !confirm(`ERP 파일의 월(${m})과 선택한 마감월(${$('#cMonth').value})이 다릅니다. ${m}로 마감할까요?`)) return;
   if ((s.bad || s.warn) && !confirm(`불일치 ${s.bad}건, 확인필요 ${s.warn}건이 남아 있습니다. 그래도 ${m} 마감을 확정할까요?`)) return;
-  if (!confirm(`${m} 마감을 확정하면 해당 월 입고는 수정·삭제할 수 없게 잠깁니다 (관리자만 해제 가능). 진행할까요?`)) return;
-  const row = { month: m, locked: true, erp_amt: s.erpAmt, vendor_amt: s.hasVendor ? s.vendorAmt : null, staff_amt: s.staffAmt, ok: s.ok, warn: s.warn, bad: s.bad, date_diff: s.dateDiff, summary: s, rows: r.rows, erp_file: C.erpName, vendor_file: s.hasVendor ? C.venName : null, created_by_name: S.prof.name };
+  if (!confirm(`${S.vendor} ${m} 마감을 확정하면 해당 업체·월 입고는 수정·삭제할 수 없게 잠깁니다 (관리자만 해제 가능). 진행할까요?`)) return;
+  const row = { month: m, vendor: S.vendor, locked: true, erp_amt: s.erpAmt, vendor_amt: s.hasVendor ? s.vendorAmt : null, staff_amt: s.staffAmt, ok: s.ok, warn: s.warn, bad: s.bad, date_diff: s.dateDiff, summary: s, rows: r.rows, erp_file: C.erpName, vendor_file: s.hasVendor ? C.venName : null, created_by_name: S.prof.name };
   let res;
-  if (C.closing && C.closing.month === m) res = await sb.from('pm_closings').update(row).eq('month', m);
+  if (C.closing && C.closing.month === m) res = await sb.from('pm_closings').update(row).eq('month', m).eq('vendor', S.vendor);
   else res = await sb.from('pm_closings').insert(row);
   if (res.error) return toast(krErr(res.error.message) + (C.closing ? ' (기존 마감 덮어쓰기는 관리자만 가능)' : ''), 1);
-  toast(m + ' 마감 확정'); $('#cMonth').value = m; loadCloseInfo();
+  toast(S.vendor + ' ' + m + ' 마감 확정'); $('#cMonth').value = m; loadCloseInfo();
 };
 $('#btnXls').onclick = () => {
   const r = S.closeRes, s = r.summary, wb = XLSX.utils.book_new();
@@ -447,12 +481,12 @@ $('#btnXls').onclick = () => {
   }
   const lab = { ok: '일치', warn: '확인필요', bad: '불일치' };
   const sum = [['ERP 입고 합계', s.erpAmt, `P/O ${s.erpPOs}건`], ['업체 명세서 합계', s.hasVendor ? s.vendorAmt : '미사용', s.hasVendor ? `ERP 대비 ${fmt(s.vendorAmt - s.erpAmt)}` : ''], ['입고 등록 합계(ERP P/O 해당분)', s.staffAmt, `P/O ${s.staffPOs}건 · ERP 대비 ${fmt(s.staffAmt - s.erpAmt)}`], ['일치 P/O', s.ok, `날짜만 다른 P/O ${s.dateDiff}건 포함`], ['확인필요 P/O', s.warn, ''], ['불일치 P/O', s.bad, ''], ['업체 명세서에만 있는 행', s.vOnly, ''], ['ERP에 없는 등록 P/O', s.staffNoERP, ''], [], ['ERP 파일', C.erpName, ''], ['업체 파일', s.hasVendor ? C.venName : '', C.sel.join(', ')], ['작성', S.prof.name + ' · ' + new Date().toLocaleString('ko-KR'), '']];
-  XLSX.utils.book_append_sheet(wb, sheet(`대림 월마감 입고 대사 — ${s.month}`, ['항목', '값', '비고'], sum, [32, 22, 60], [1]), '요약');
+  XLSX.utils.book_append_sheet(wb, sheet(`${r.vendor} 월마감 입고 대사 — ${s.month}`, ['항목', '값', '비고'], sum, [32, 22, 60], [1]), '요약');
   const po = r.rows.map(x => { const a = [lab[x.status], x.model, x.po, x.date, x.dateNote, x.qty, x.erpAmt, x.staffAmt, x.staffDiff, x.vendorAmt, x.vendorDiff, x.staffWhere, x.issues]; a.__st = x.status; return a; });
   XLSX.utils.book_append_sheet(wb, sheet(`P/O별 대조 — ${s.month}`, ['상태', '모델', 'P/O No', 'ERP 입고일', '날짜 차이', '대수/수량', 'ERP 금액', '등록 금액', '등록−ERP', '업체 금액', '업체−ERP', '등록 담당', '확인 내용'], po, [9, 24, 13, 11, 18, 9, 14, 14, 11, 14, 11, 12, 46], [5, 6, 7, 8, 9, 10]), 'PO별대조');
   const bm = r.byModel.map(x => { const a = [x.model, x.pos, x.qty || null, x.unit || '', x.erp, s.hasVendor ? x.vendor : null, s.hasVendor ? x.vendor - x.erp : null, x.staff, x.staff - x.erp]; a.__st = (s.hasVendor && x.vendor !== x.erp) || x.staff !== x.erp ? 'bad' : 'ok'; return a; });
   XLSX.utils.book_append_sheet(wb, sheet('모델·품목군별 소계', ['모델/품목군', 'P/O', '대수/수량', '단위', 'ERP', '업체', '업체−ERP', '입고 등록', '등록−ERP'], bm, [24, 6, 10, 6, 16, 16, 12, 16, 12], [1, 2, 4, 5, 6, 7, 8]), '모델별');
-  XLSX.writeFile(wb, `대림_입고대사_${s.month}.xlsx`);
+  XLSX.writeFile(wb, `입고대사_${r.vendor}_${s.month}.xlsx`);
 };
 
 /* ================= 기준정보 ================= */
@@ -460,8 +494,8 @@ let selItem = null;
 function renderMaster() {
   const adm = S.prof.role === 'admin';
   $('#mAdmHint').textContent = adm ? '이름·정렬·사용여부는 셀을 고친 뒤 [저장]' : '조회 전용 (수정은 관리자)';
-  $('#tItems').innerHTML = '<thead><tr><th>코드</th><th>품목명</th><th>구분</th><th>단위</th><th class="num">현재 단가</th><th>적용일</th><th class="num">정렬</th><th class="c">사용</th>' + (adm ? '<th></th>' : '') + '</tr></thead><tbody>' +
-    S.items.map(i => { const p = S.prices.filter(x => x.code === i.code && x.valid_from <= today()).sort((a, b) => b.valid_from.localeCompare(a.valid_from))[0]; return `<tr class="clk ${selItem === i.code ? 'sel' : ''}" data-c="${esc(i.code)}"><td class="nw">${esc(i.code)}</td><td>${adm ? `<input class="ie" data-k="name" value="${esc(i.name)}" style="width:100%">` : esc(i.name)}</td><td>${esc(i.category)}</td><td>${esc(i.unit)}</td><td class="num">${p ? fmt(p.price) : '<span class="err">없음</span>'}</td><td class="nw small">${p ? esc(p.valid_from) : ''}</td><td class="num">${adm ? `<input class="ie" data-k="sort" value="${i.sort}" style="width:50px;text-align:right">` : i.sort}</td><td class="c">${adm ? `<input type="checkbox" class="ie" data-k="active" ${i.active ? 'checked' : ''}>` : (i.active ? 'Y' : '')}</td>${adm ? '<td><button class="isave">저장</button></td>' : ''}</tr>`; }).join('') + '</tbody>';
+  $('#tItems').innerHTML = '<thead><tr><th>코드</th><th>품목명</th><th>ERP 품번</th><th>구분</th><th>단위</th><th class="num">현재 단가</th><th>적용일</th><th class="num">정렬</th><th class="c">사용</th>' + (adm ? '<th></th>' : '') + '</tr></thead><tbody>' +
+    vItems().map(i => { const p = S.prices.filter(x => x.code === i.code && x.valid_from <= today()).sort((a, b) => b.valid_from.localeCompare(a.valid_from))[0]; return `<tr class="clk ${selItem === i.code ? 'sel' : ''}" data-c="${esc(i.code)}"><td class="nw">${esc(i.code)}</td><td>${adm ? `<input class="ie" data-k="name" value="${esc(i.name)}" style="width:100%">` : esc(i.name)}</td><td>${adm ? `<input class="ie" data-k="erp_part" value="${esc(i.erp_part || '')}" style="width:110px">` : esc(i.erp_part || '')}</td><td>${esc(i.category)}</td><td>${esc(i.unit)}</td><td class="num">${p ? fmt(p.price) : '<span class="err">없음</span>'}</td><td class="nw small">${p ? esc(p.valid_from) : ''}</td><td class="num">${adm ? `<input class="ie" data-k="sort" value="${i.sort}" style="width:50px;text-align:right">` : i.sort}</td><td class="c">${adm ? `<input type="checkbox" class="ie" data-k="active" ${i.active ? 'checked' : ''}>` : (i.active ? 'Y' : '')}</td>${adm ? '<td><button class="isave">저장</button></td>' : ''}</tr>`; }).join('') + '</tbody>';
   $('#tItems').querySelectorAll('tr.clk').forEach(tr => tr.onclick = e => { if (e.target.closest('input,button')) return; selItem = tr.dataset.c; $('#pCode').value = selItem; renderMaster(); });
   $('#tItems').querySelectorAll('.isave').forEach(b => b.onclick = async () => {
     const tr = b.closest('tr'), code = tr.dataset.c, upd = {};
@@ -469,14 +503,14 @@ function renderMaster() {
     const { error } = await sb.from('pm_items').update(upd).eq('code', code);
     if (error) return toast(krErr(error.message), 1); toast('품목 저장'); await loadRefs(); renderMaster();
   });
-  $('#pCode').innerHTML = S.items.map(i => `<option value="${esc(i.code)}" ${i.code === selItem ? 'selected' : ''}>${esc(i.name)}</option>`).join('');
+  $('#pCode').innerHTML = vItems().map(i => `<option value="${esc(i.code)}" ${i.code === selItem ? 'selected' : ''}>${esc(i.name)}</option>`).join('');
   if (!$('#pFrom').value) $('#pFrom').value = today();
-  const ps = S.prices.filter(p => !selItem || p.code === selItem);
-  $('#mPriceFor').textContent = selItem ? '— ' + (S.itemMap[selItem]?.name || selItem) : '— 전체 (품목을 누르면 해당 품목만)';
+  const vset = new Set(vItems().map(i => i.code)); const ps = S.prices.filter(p => vset.has(p.code) && (!selItem || p.code === selItem));
+  $('#mPriceFor').textContent = selItem ? '— ' + (S.itemMap[selItem]?.name || selItem) : `— ${S.vendor} 전체 (품목을 누르면 해당 품목만)`;
   $('#tPrices').innerHTML = '<thead><tr><th>품목</th><th class="num">단가</th><th>적용일</th><th>비고</th>' + (adm ? '<th></th>' : '') + '</tr></thead><tbody>' +
     ps.map(p => `<tr><td>${esc(S.itemMap[p.code]?.name || p.code)}</td><td class="num">${fmt(p.price)}</td><td class="nw">${esc(p.valid_from)}${p.valid_from > today() ? ' <span class="tag t-date">예정</span>' : ''}</td><td class="small">${esc(p.note || '')}</td>${adm ? `<td><span class="x" data-pid="${p.id}">✕</span></td>` : ''}</tr>`).join('') + '</tbody>';
   $('#tPrices').querySelectorAll('[data-pid]').forEach(x => x.onclick = async () => { if (!confirm('이 단가 이력을 삭제할까요?')) return; const { error } = await sb.from('pm_prices').delete().eq('id', x.dataset.pid); if (error) return toast(krErr(error.message), 1); await loadRefs(); renderMaster(); });
-  renderEngineMaster();
+  renderEngineMaster(); renderVendors();
 }
 $('#pAdd').onclick = async () => {
   const row = { code: $('#pCode').value, price: Number($('#pPrice').value), valid_from: $('#pFrom').value, note: $('#pNote').value.trim() || null };
@@ -486,15 +520,16 @@ $('#pAdd').onclick = async () => {
   toast('단가 등록'); $('#pPrice').value = ''; $('#pNote').value = ''; selItem = row.code; await loadRefs(); renderMaster();
 };
 $('#mAddItem').onclick = async () => {
-  const code = (prompt('품목 코드 (모델 ID 또는 ERP 품번, 예: Z60DC / 1301225)') || '').trim(); if (!code) return;
+  const code = (prompt(`[${S.vendor}] 품목 코드 (시스템 내부 고유값, 예: Z60DC / BS-1303999)`) || '').trim(); if (!code) return;
+  const erp_part = (prompt('ERP 품번 (예: 1303999GT)') || '').trim();
   const name = (prompt('품목명') || '').trim(); if (!name) return;
   const category = (prompt('구분: 모델 / 단품 / CWT', '모델') || '모델').trim();
   const unit = (prompt('단위: 대 / ea / kg', category === '모델' ? '대' : category === 'CWT' ? 'kg' : 'ea') || '대').trim();
-  const { error } = await sb.from('pm_items').insert({ code, name, category, unit, sort: 900 });
+  const { error } = await sb.from('pm_items').insert({ code, name, category, unit, vendor: S.vendor, erp_part: erp_part || null, sort: 900 });
   if (error) return toast(krErr(error.message), 1);
   toast('품목 추가 — 단가를 등록하세요'); selItem = code; await loadRefs(); renderMaster(); initItemFilters();
 };
-function initItemFilters() { $('#lItem').innerHTML = '<option value="">품목: 전체</option>' + S.items.map(i => `<option value="${esc(i.code)}">${esc(i.name)}</option>`).join(''); }
+function initItemFilters() { $('#lItem').innerHTML = '<option value="">품목: 전체</option>' + vItems().map(i => `<option value="${esc(i.code)}">${esc(i.name)}</option>`).join(''); }
 function renderEngineMaster() {
   const M = S.master;
   $('#master tbody').innerHTML = M.models.map((m, i) => `<tr>${['id', 'name', 'vendor', 'key', 'per', 'staff'].map(k => `<td><input data-i="${i}" data-k="${k}" value="${esc(m[k])}"></td>`).join('')}<td class="x adm" data-del="${i}">✕</td></tr>`).join('');
@@ -521,6 +556,21 @@ $('#mSave').onclick = async () => {
   collectEngine(); S.master.models = S.master.models.filter(m => m.id); S.master.partGroups = S.master.partGroups.filter(g => g.name);
   const { error } = await sb.from('pm_config').upsert({ id: 'master', data: S.master, updated_at: new Date().toISOString() });
   if (error) return toast(krErr(error.message), 1); toast('모델 마스터 저장'); renderEngineMaster();
+};
+
+function renderVendors() {
+  const adm = S.prof.role === 'admin';
+  $('#tVendors tbody').innerHTML = S.vendors.map(v => `<tr data-v="${esc(v.name)}"><td>${esc(v.name)}</td><td><input class="ve" data-k="erp_code" value="${esc(v.erp_code || '')}"></td><td><input class="ve" data-k="sort" value="${v.sort}"></td><td class="c">${adm ? `<input type="checkbox" class="ve" data-k="active" ${v.active ? 'checked' : ''} style="width:auto">` : (v.active ? 'Y' : '')}</td><td>${adm ? '<button class="vsave">저장</button>' : ''}</td></tr>`).join('');
+  $('#tVendors').querySelectorAll('.vsave').forEach(b => b.onclick = async () => {
+    const tr = b.closest('tr'), upd = {}; tr.querySelectorAll('.ve').forEach(x => upd[x.dataset.k] = x.type === 'checkbox' ? x.checked : x.dataset.k === 'sort' ? Number(x.value) || 0 : x.value.trim() || null);
+    const { error } = await sb.from('pm_vendors').update(upd).eq('name', tr.dataset.v); if (error) return toast(krErr(error.message), 1); toast('업체 저장'); await loadRefs(); renderMaster();
+  });
+}
+$('#addVendor').onclick = async () => {
+  const name = (prompt('업체명 (예: 아도)') || '').trim(); if (!name) return;
+  const erp_code = (prompt('ERP 입고상세조회의 거래처 코드 (예: 1020)') || '').trim();
+  const { error } = await sb.from('pm_vendors').insert({ name, erp_code: erp_code || null, sort: 50 });
+  if (error) return toast(krErr(error.message), 1); toast('업체 추가 — 품목과 단가를 등록하세요'); await loadRefs(); renderMaster();
 };
 
 /* ================= 사용자 ================= */

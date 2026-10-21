@@ -35,7 +35,10 @@ nav a:hover{color:#fff}
 nav a.on{color:#fff;border-bottom-color:#fff}
 .me{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px}
 .me button{background:transparent;color:#fff;border-color:rgba(255,255,255,.4);padding:4px 10px}
-.subnav{background:#fff;border-bottom:1px solid var(--line);padding:9px 20px;font-size:12px;color:var(--mut)}
+.subnav{background:#fff;border-bottom:1px solid var(--line);padding:6px 20px;font-size:12px;color:var(--mut);display:flex;align-items:center;gap:12px}
+.subnav #subnav{flex:1}
+.vsel{flex-direction:row;align-items:center;gap:6px;font-weight:700;color:var(--navy)}
+.vsel select{font-weight:700;border-color:var(--navy);min-width:150px}
 .subnav b{color:var(--navy)}
 main{padding:14px 20px;max-width:1560px;margin:0 auto}
 .card{background:#fff;border:1px solid var(--line);border-radius:6px;padding:14px 16px;margin-bottom:14px}

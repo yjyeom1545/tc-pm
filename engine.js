@@ -63,7 +63,7 @@ function parseERP(wb, XLSX) {
     const col = (...names) => { for (const n of names) { const i = H.indexOf(norm(n)); if (i >= 0) return i; } return -1; };
     const c = {
       part: col('품목'), pname: col('품목명'), spec: col('품목규격'), date: col('입고일'), qty: col('입고수량'),
-      amt: col('입고금액(자국)', '입고금액'), po: col('P/O No'), grp: col('품목그룹명'), vendor: col('거래처명'),
+      amt: col('입고금액(자국)', '입고금액'), po: col('P/O No'), grp: col('품목그룹명'), vendor: col('거래처명'), vcode: col('거래처'),
       price: col('입고단가(자국)', '입고단가'), gr: col('입고번호'), unit: col('구매단위', '재고단위')
     };
     const lines = [];
@@ -72,7 +72,7 @@ function parseERP(wb, XLSX) {
       const po = r[c.po]; if (!isPO(po)) continue;
       lines.push({
         po: po.trim(), part: String(r[c.part] ?? '').trim(), pname: r[c.pname], spec: r[c.spec], date: toDateStr(r[c.date], XLSX),
-        qty: Number(r[c.qty]) || 0, amt: r0(r[c.amt]), grp: r[c.grp], unit: c.unit >= 0 ? String(r[c.unit] ?? '').trim() : '', vendor: r[c.vendor], price: Number(r[c.price]) || 0,
+        qty: Number(r[c.qty]) || 0, amt: r0(r[c.amt]), grp: r[c.grp], unit: c.unit >= 0 ? String(r[c.unit] ?? '').trim() : '', vendor: r[c.vendor], vcode: c.vcode >= 0 ? String(r[c.vcode] ?? '').trim() : '', price: Number(r[c.price]) || 0,
         gr: r[c.gr]
       });
     }

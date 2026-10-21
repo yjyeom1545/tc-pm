@@ -45,7 +45,7 @@
     </nav>
     <div class="me"><span id="meName"></span><span id="meRole" class="tag t-mut"></span><button id="btnOut">로그아웃</button></div>
   </header>
-  <div class="subnav" id="subnav"></div>
+  <div class="subnav"><span id="subnav"></span><label class="vsel">업체<select id="vendorSel"></select></label></div>
 
   <main>
     <!-- 입고 등록 -->
@@ -106,8 +106,8 @@
           <span id="cLockInfo" class="small"></span>
         </div>
         <div class="drops">
-          <div class="drop" id="dErp"><b>ERP 입고상세조회(S) <span class="tag t-bad">필수</span></b><div class="hint">ERP에서 다운받은 .xls 원본 그대로</div><div class="files"></div><input type="file" accept=".xls,.xlsx"></div>
-          <div class="drop" id="dVen"><b>업체 거래명세서 (대림) <span class="tag t-mut">선택</span></b><div class="hint">넣으면 ERP · 업체 · 입고등록 3자 대조</div><div class="files"></div><input type="file" accept=".xls,.xlsx"></div>
+          <div class="drop" id="dErp"><b>ERP 입고상세조회(S) <span class="tag t-bad">필수</span></b><div class="hint">ERP에서 다운받은 .xls 원본 그대로 (여러 업체가 섞여 있어도 선택한 업체 거래처코드만 사용)</div><div class="files"></div><input type="file" accept=".xls,.xlsx"></div>
+          <div class="drop" id="dVen"><b>업체 거래명세서 <span class="tag t-mut">선택</span></b><div class="hint">넣으면 ERP · 업체 · 입고등록 3자 대조 (대림 양식 자동 인식)</div><div class="files"></div><input type="file" accept=".xls,.xlsx"></div>
           <div class="drop dis"><b>입고 등록 내역 <span class="tag t-ok">자동</span></b><div class="hint">이 시스템에 담당자들이 등록한 해당 월 입고를 자동으로 불러옵니다</div><div class="files" id="cRegFiles"></div></div>
         </div>
         <div id="cSheetsBox" class="hide" style="margin-top:10px"><div class="muted small" id="idxInfo"></div><div class="sheets" id="sheetList"></div></div>
@@ -164,6 +164,11 @@
           <div class="note small">단가가 바뀌면 <b>새 적용일로 한 줄 추가</b>하세요. 입고 등록 시 입고일 기준으로 맞는 단가가 자동 적용됩니다.</div>
           <div class="tw" style="max-height:44vh"><table id="tPrices"></table></div>
         </div>
+      </div>
+      <div class="card">
+        <h2>업체 <span class="muted small" style="font-weight:400">ERP 입고상세조회의 '거래처' 코드로 업체별 입고를 구분합니다</span></h2>
+        <table id="tVendors" class="edit" style="max-width:640px"><thead><tr><th>업체명</th><th style="width:140px">ERP 거래처코드</th><th style="width:70px">정렬</th><th style="width:60px" class="c">사용</th><th style="width:70px"></th></tr></thead><tbody></tbody></table>
+        <button id="addVendor" class="adm ghost">+ 업체 추가</button>
       </div>
       <div class="card">
         <h2>ERP 모델 식별 마스터 <span class="muted small" style="font-weight:400">ERP PO 안에 대표부품이 있으면 해당 모델로 판단, 대수 = 대표부품 수량 ÷ 대당수량</span></h2>
