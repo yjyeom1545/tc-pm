@@ -57,7 +57,6 @@
             <label>업체<select id="rVendor" style="min-width:150px;font-weight:700"></select></label>
             <label>입고일<input type="date" id="rDate"></label>
             <label>P/O No<input id="rPO" placeholder="PO26100001" maxlength="10" autocomplete="off"></label>
-            <label class="chk"><input type="checkbox" id="rPre"> 선등록 (출고대기·선입고)</label>
           </div>
           <div id="poMsg" class="small"></div>
           <table class="lines" id="rLines">
@@ -66,7 +65,7 @@
             <tfoot><tr><td colspan="4" class="num"><b>합계</b></td><td class="num"><b id="rTotal">0</b></td><td></td></tr></tfoot>
           </table>
           <button id="rAddLine" class="ghost">+ 품목 추가</button>
-          <label class="full">비고<input id="rNote" placeholder="예: 원자재 지연 선등록"></label>
+          <label class="full">비고<input id="rNote" placeholder="특이사항 (예: 단가 협의 건)"></label>
           <div class="note small">금액은 <b>입고일 기준 단가표 × 수량</b>으로 자동 계산됩니다. 단가를 직접 바꾸면 노란색으로 표시되고 마감 때 확인 대상이 됩니다.</div>
           <div class="btns"><button class="pri" id="rSave">저장</button><button id="rReset">새로 입력</button><span id="rMsg" class="small"></span></div>
         </div>
