@@ -83,7 +83,8 @@ async function loadRefs() {
   S.vendors = vd.data || [];
   const act = S.vendors.filter(v => v.active);
   if (!S.vendor) { let saved = null; try { saved = localStorage.getItem(LSV); } catch (e) {} S.vendor = (act.find(v => v.name === saved) || act[0] || { name: '대림에스앤티' }).name; }
-  $('#vendorSel').innerHTML = act.map(v => `<option ${v.name === S.vendor ? 'selected' : ''}>${esc(v.name)}</option>`).join('');
+  const vopts = act.map(v => `<option ${v.name === S.vendor ? 'selected' : ''}>${esc(v.name)}</option>`).join('');
+  $('#vendorSel').innerHTML = vopts; $('#rVendor').innerHTML = vopts;
   S.items = it.data || []; S.itemMap = Object.fromEntries(S.items.map(i => [i.code, i]));
   S.prices = pr.data || [];
   S.master = (cf.data && cf.data.data) || JSON.parse(JSON.stringify(Recon.DEFAULT_MASTER));
@@ -107,10 +108,14 @@ const SUB = {
 $('#nav').onclick = e => { const v = e.target.dataset.v; if (v) go(v); };
 function setVendor(v) {
   if (v === S.vendor) return; S.vendor = v; try { localStorage.setItem(LSV, v); } catch (e) {}
-  $('#vendorSel').value = v; S.closeRes = null; selItem = null; resetForm(); initItemFilters(); renderEmpty();
+  $('#vendorSel').value = v; $('#rVendor').value = v; S.closeRes = null; selItem = null;
+  const keep = S.editId ? null : { po: $('#rPO').value, note: $('#rNote').value, pre: $('#rPre').checked };
+  resetForm(); if (keep) { $('#rPO').value = keep.po; $('#rNote').value = keep.note; $('#rPre').checked = keep.pre; checkPO(); }
+  initItemFilters(); renderEmpty();
   if (C.erp) showErpInfo();
 }
 $('#vendorSel').onchange = () => { setVendor($('#vendorSel').value); go(S.view); };
+$('#rVendor').onchange = () => { setVendor($('#rVendor').value); loadRecent(); };
 function go(v) {
   if (!SUB[v] || (v === 'users' && S.prof.role !== 'admin')) v = 'reg';
   location.hash = v; S.view = v;
@@ -143,7 +148,7 @@ function addLine(l = {}) {
   sel.onchange = () => { tr.dataset.ovr = ''; autoPrice(tr); calc(); q.focus(); };
   q.oninput = calc;
   p.oninput = () => { tr.dataset.ovr = Number(p.value) !== priceFor(sel.value, $('#rDate').value) ? '1' : ''; calc(); };
-  tr.querySelector('.x').onclick = () => { tr.remove(); if (!$('#rLines tbody').children.length) addLine(); calc(); };
+  tr.querySelector('.x').onclick = () => { if ($('#rLines tbody').children.length === 1) { tr.querySelector('.lc').value = ''; tr.querySelector('.lq').value = ''; tr.querySelector('.lp').value = ''; tr.dataset.ovr = ''; } else tr.remove(); calc(); };
   if (!l.unit_price) autoPrice(tr);
   calc();
   return tr;
@@ -166,7 +171,7 @@ function calc() {
   $('#rTotal').textContent = fmt(tot);
 }
 $('#rAddLine').onclick = () => addLine().querySelector('.lc').focus();
-$('#rDate').onchange = () => { $$('#rLines tbody tr').forEach(autoPrice); calc(); checkPO(); };
+$('#rDate').onchange = () => { $$('#rLines tbody tr').forEach(autoPrice); calc(); checkPO(); loadRecent(); };
 let poTimer;
 $('#rPO').oninput = () => { $('#rPO').value = $('#rPO').value.toUpperCase().replace(/\s/g, ''); clearTimeout(poTimer); poTimer = setTimeout(checkPO, 250); };
 async function checkPO() {
@@ -184,7 +189,7 @@ function resetForm() {
   $('#rPO').value = ''; $('#rPre').checked = false; $('#rNote').value = ''; $('#poMsg').innerHTML = ''; $('#rMsg').textContent = '';
   if (!$('#rDate').value) $('#rDate').value = today();
   $('#rLines tbody').innerHTML = ''; addLine();
-  $('#rSave').textContent = '저장';
+  $('#rSave').textContent = '저장'; $('#rReset').textContent = '새로 입력';
 }
 $('#rReset').onclick = () => { resetForm(); $('#rPO').focus(); };
 $('#rSave').onclick = async () => {
@@ -220,11 +225,14 @@ async function fetchReceipts(q) {
 }
 const SEL = 'id,po,recv_date,vendor,pre_reg,note,created_by,created_by_name,created_at,updated_at,pm_receipt_lines(code,qty,unit_price,amount,price_overridden)';
 async function loadRecent() {
-  S.recent = await fetchReceipts(sb.from('pm_receipts').select(SEL).eq('vendor', S.vendor).order('created_at', { ascending: false }).limit(20));
+  const m = ($('#rDate').value || today()).slice(0, 7);
+  S.recent = await fetchReceipts(sb.from('pm_receipts').select(SEL).eq('vendor', S.vendor).gte('recv_date', m + '-01').lte('recv_date', monthEnd(m)).order('recv_date', { ascending: false }).order('created_at', { ascending: false }));
+  const tot = S.recent.reduce((s, r) => s + r.amount, 0);
+  $('#recentTitle').innerHTML = `${esc(S.vendor)} · ${esc(m.replace('-', '년 '))}월 등록 현황 <span class="muted small" style="font-weight:400">${S.recent.length}건 · ${fmt(tot)}원</span>`;
   const t = $('#tRecent');
   t.innerHTML = '<thead><tr><th>입고일</th><th>P/O No</th><th>품목 · 수량</th><th class="num">금액</th><th>담당</th></tr></thead><tbody>' +
     (S.recent.length ? S.recent.map(r => `<tr class="clk ${r.id === S.editId ? 'sel' : ''}" data-id="${r.id}"><td class="nw">${esc(r.recv_date.slice(5))}</td><td class="nw">${esc(r.po)}${r.pre_reg ? ' <span class="tag t-date">선등록</span>' : ''}</td><td>${lineText(r)}</td><td class="num">${fmt(r.amount)}</td><td class="nw">${esc(r.created_by_name || '')}</td></tr>`).join('')
-      : `<tr class="empty"><td colspan="5">${esc(S.vendor)} 등록 입고가 없습니다</td></tr>`) + '</tbody>';
+      : `<tr class="empty"><td colspan="5">${esc(S.vendor)} ${esc(m)} 등록 내역이 없습니다</td></tr>`) + '</tbody>';
   t.querySelectorAll('tr.clk').forEach(tr => tr.onclick = () => editReceipt(S.recent.find(r => r.id === tr.dataset.id)));
 }
 function lineText(r) { return r.lines.map(l => { const it = S.itemMap[l.code]; return `${esc(it ? it.name : l.code)} <b>${fmt(l.qty)}</b>${it && it.unit !== '대' ? esc(it.unit) : (it ? '대' : '')}${l.price_overridden ? ' <span class="tag t-warn">단가수정</span>' : ''}`; }).join('<br>'); }
@@ -234,7 +242,7 @@ function editReceipt(r) {
   if (!canEdit(r)) return toast('본인이 등록한 건만 수정할 수 있습니다 (관리자 제외)', 1);
   if (r.vendor && r.vendor !== S.vendor) setVendor(r.vendor);
   go('reg');
-  S.editId = r.id; $('#regTitle').textContent = '입고 수정 — ' + r.vendor + ' · ' + r.po; $('#rSave').textContent = '수정 저장';
+  S.editId = r.id; $('#regTitle').textContent = '입고 수정 — ' + r.vendor + ' · ' + r.po; $('#rSave').textContent = '수정 저장'; $('#rReset').textContent = '수정 취소';
   $('#rDate').value = r.recv_date; $('#rPO').value = r.po; $('#rPre').checked = r.pre_reg; $('#rNote').value = r.note || '';
   $('#rLines tbody').innerHTML = ''; r.lines.forEach(l => addLine({ code: l.code, qty: Number(l.qty), unit_price: Number(l.unit_price), overridden: l.price_overridden }));
   checkPO(); loadRecent();

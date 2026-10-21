@@ -54,6 +54,7 @@
         <div class="card">
           <h2 id="regTitle">입고 등록</h2>
           <div class="frow">
+            <label>업체<select id="rVendor" style="min-width:150px;font-weight:700"></select></label>
             <label>입고일<input type="date" id="rDate"></label>
             <label>P/O No<input id="rPO" placeholder="PO26100001" maxlength="10" autocomplete="off"></label>
             <label class="chk"><input type="checkbox" id="rPre"> 선등록 (출고대기·선입고)</label>
@@ -70,7 +71,8 @@
           <div class="btns"><button class="pri" id="rSave">저장</button><button id="rReset">새로 입력</button><span id="rMsg" class="small"></span></div>
         </div>
         <div class="card">
-          <h2>최근 등록 <span class="muted small" style="font-weight:400">전체 담당자 · 최근 20건</span></h2>
+          <h2 id="recentTitle">등록 현황</h2>
+          <div class="muted small" style="margin:-4px 0 8px">입고일이 속한 달의 등록 내역입니다. 중복·누락 확인용이며, 행을 누르면 수정할 수 있습니다.</div>
           <div class="tw" style="max-height:62vh"><table id="tRecent"></table></div>
         </div>
       </div>
