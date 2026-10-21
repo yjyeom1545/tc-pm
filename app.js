@@ -84,7 +84,8 @@ async function loadRefs() {
   const act = S.vendors.filter(v => v.active);
   if (!S.vendor) { let saved = null; try { saved = localStorage.getItem(LSV); } catch (e) {} S.vendor = (act.find(v => v.name === saved) || act[0] || { name: '대림에스앤티' }).name; }
   const vopts = act.map(v => `<option ${v.name === S.vendor ? 'selected' : ''}>${esc(v.name)}</option>`).join('');
-  $('#vendorSel').innerHTML = vopts; $('#rVendor').innerHTML = vopts;
+  $('#vendorSel').innerHTML = vopts; $('#rVendor').innerHTML = vopts; $('#cVendor').innerHTML = vopts;
+  $('#lVendor').innerHTML = '<option value="__ALL__">전체 업체</option>' + vopts;
   S.items = it.data || []; S.itemMap = Object.fromEntries(S.items.map(i => [i.code, i]));
   S.prices = pr.data || [];
   S.master = (cf.data && cf.data.data) || JSON.parse(JSON.stringify(Recon.DEFAULT_MASTER));
@@ -108,7 +109,7 @@ const SUB = {
 $('#nav').onclick = e => { const v = e.target.dataset.v; if (v) go(v); };
 function setVendor(v) {
   if (v === S.vendor) return; S.vendor = v; try { localStorage.setItem(LSV, v); } catch (e) {}
-  $('#vendorSel').value = v; $('#rVendor').value = v; S.closeRes = null; selItem = null;
+  $('#vendorSel').value = v; $('#rVendor').value = v; $('#cVendor').value = v; if (!S.listAll) $('#lVendor').value = v; S.closeRes = null; selItem = null;
   const keep = S.editId ? null : { po: $('#rPO').value, note: $('#rNote').value, pre: $('#rPre').checked };
   resetForm(); if (keep) { $('#rPO').value = keep.po; $('#rNote').value = keep.note; $('#rPre').checked = keep.pre; checkPO(); }
   initItemFilters(); renderEmpty();
@@ -116,6 +117,8 @@ function setVendor(v) {
 }
 $('#vendorSel').onchange = () => { setVendor($('#vendorSel').value); go(S.view); };
 $('#rVendor').onchange = () => { setVendor($('#rVendor').value); loadRecent(); };
+$('#cVendor').onchange = () => { setVendor($('#cVendor').value); loadCloseInfo(); };
+$('#lVendor').onchange = () => { const v = $('#lVendor').value; S.listAll = v === '__ALL__'; if (!S.listAll) setVendor(v); $('#lItem').value = ''; loadList(); };
 function go(v) {
   if (!SUB[v] || (v === 'users' && S.prof.role !== 'admin')) v = 'reg';
   location.hash = v; S.view = v;
@@ -252,8 +255,11 @@ function editReceipt(r) {
 ['#lMonth', '#lStaff', '#lItem'].forEach(id => $(id).onchange = () => id === '#lMonth' ? loadList() : renderList());
 $('#lText').oninput = renderList;
 async function loadList() {
+  $('#lVendor').value = S.listAll ? '__ALL__' : S.vendor;
   const m = $('#lMonth').value || thisMonth();
-  S.list = await fetchReceipts(sb.from('pm_receipts').select(SEL).eq('vendor', S.vendor).gte('recv_date', m + '-01').lte('recv_date', monthEnd(m)).order('recv_date').order('po'));
+  let q = sb.from('pm_receipts').select(SEL); if (!S.listAll) q = q.eq('vendor', S.vendor);
+  S.list = await fetchReceipts(q.gte('recv_date', m + '-01').lte('recv_date', monthEnd(m)).order('recv_date').order('po'));
+  $('#lItem').disabled = !!S.listAll;
   const staffs = [...new Set(S.list.map(r => r.created_by_name || ''))].sort();
   const cur = $('#lStaff').value;
   $('#lStaff').innerHTML = '<option value="">담당자: 전체</option>' + staffs.map(s => `<option ${s === cur ? 'selected' : ''}>${esc(s)}</option>`).join('');
@@ -267,14 +273,15 @@ function renderList() {
   const rows = listFiltered();
   const tot = rows.reduce((s, r) => s + r.amount, 0);
   const pre = rows.filter(r => r.pre_reg), ovr = rows.filter(r => r.lines.some(l => l.price_overridden));
-  $('#lKpi').innerHTML = `<div class="kpi"><div class="l">등록 P/O</div><div class="v">${rows.length}</div><div class="d muted">${esc(S.vendor)} · ${esc($('#lMonth').value)}</div></div>
+  $('#lKpi').innerHTML = `<div class="kpi"><div class="l">등록 P/O</div><div class="v">${rows.length}</div><div class="d muted">${S.listAll ? '전체 업체' : esc(S.vendor)} · ${esc($('#lMonth').value)}</div></div>
    <div class="kpi"><div class="l">입고 금액 합계</div><div class="v">${fmt(tot)}</div></div>
    <div class="kpi"><div class="l">선등록</div><div class="v">${pre.length}</div><div class="d muted">${fmt(pre.reduce((s, r) => s + r.amount, 0))}원</div></div>
    <div class="kpi warn"><div class="l">단가 직접 수정</div><div class="v">${ovr.length}</div><div class="d muted">단가표와 다른 단가로 입력된 건</div></div>`;
   $('#lInfo').textContent = `${rows.length} / ${S.list.length}건`;
-  $('#tList').innerHTML = '<thead><tr><th>입고일</th><th>P/O No</th><th>품목 · 수량</th><th class="num">금액</th><th>담당</th><th>비고</th><th></th></tr></thead><tbody>' +
-    (rows.length ? rows.map(r => `<tr><td class="nw">${esc(r.recv_date)}</td><td class="nw">${esc(r.po)}${r.pre_reg ? ' <span class="tag t-date">선등록</span>' : ''}</td><td>${lineText(r)}</td><td class="num">${fmt(r.amount)}</td><td class="nw">${esc(r.created_by_name || '')}</td><td class="small">${esc(r.note || '')}</td><td class="nw">${canEdit(r) ? `<button data-e="${r.id}">수정</button> <button data-d="${r.id}">삭제</button>` : ''}</td></tr>`).join('')
-      : '<tr class="empty"><td colspan="7">해당 월 등록 내역이 없습니다</td></tr>') + '</tbody>';
+  const all = !!S.listAll;
+  $('#tList').innerHTML = '<thead><tr>' + (all ? '<th>업체</th>' : '') + '<th>입고일</th><th>P/O No</th><th>품목 · 수량</th><th class="num">금액</th><th>담당</th><th>비고</th><th></th></tr></thead><tbody>' +
+    (rows.length ? rows.map(r => `<tr>${all ? `<td class="nw">${esc(r.vendor)}</td>` : ''}<td class="nw">${esc(r.recv_date)}</td><td class="nw">${esc(r.po)}${r.pre_reg ? ' <span class="tag t-date">선등록</span>' : ''}</td><td>${lineText(r)}</td><td class="num">${fmt(r.amount)}</td><td class="nw">${esc(r.created_by_name || '')}</td><td class="small">${esc(r.note || '')}</td><td class="nw">${canEdit(r) ? `<button data-e="${r.id}">수정</button> <button data-d="${r.id}">삭제</button>` : ''}</td></tr>`).join('')
+      : `<tr class="empty"><td colspan="${all ? 8 : 7}">해당 월 등록 내역이 없습니다</td></tr>`) + '</tbody>';
   $('#tList').querySelectorAll('[data-e]').forEach(b => b.onclick = () => editReceipt(S.list.find(r => r.id === b.dataset.e)));
   $('#tList').querySelectorAll('[data-d]').forEach(b => b.onclick = async () => {
     const r = S.list.find(x => x.id === b.dataset.d);
@@ -283,6 +290,14 @@ function renderList() {
     if (error || !count) return toast(error ? krErr(error.message) : '삭제 권한이 없거나 마감된 월입니다', 1);
     toast('삭제했습니다'); loadList();
   });
+  if (all) {
+    const vg = {}; rows.forEach(r => { const a = vg[r.vendor] || (vg[r.vendor] = { n: 0, amt: 0, pre: 0 }); a.n++; a.amt += r.amount; if (r.pre_reg) a.pre += r.amount; });
+    const order = S.vendors.map(v => v.name).filter(n => vg[n]).concat(Object.keys(vg).filter(n => !S.vendors.some(v => v.name === n)));
+    $('#tListSum').innerHTML = '<thead><tr><th>업체</th><th class="num">P/O</th><th class="num">금액</th><th class="num">선등록</th></tr></thead><tbody>' +
+      (order.length ? order.map(n => `<tr class="clk" data-v="${esc(n)}"><td>${esc(n)}</td><td class="num">${vg[n].n}</td><td class="num">${fmt(vg[n].amt)}</td><td class="num">${vg[n].pre ? fmt(vg[n].pre) : ''}</td></tr>`).join('') + `<tr style="font-weight:700"><td>합계</td><td class="num">${rows.length}</td><td class="num">${fmt(tot)}</td><td></td></tr>` : '<tr class="empty"><td colspan="4">업체별 합계</td></tr>') + '</tbody>';
+    $('#tListSum').querySelectorAll('tr.clk').forEach(tr => tr.onclick = () => { $('#lVendor').value = tr.dataset.v; $('#lVendor').onchange(); });
+    return;
+  }
   // 품목별 합계
   const agg = {};
   rows.forEach(r => r.lines.forEach(l => { const a = agg[l.code] || (agg[l.code] = { qty: 0, amt: 0, n: 0 }); a.qty += Number(l.qty); a.amt += Number(l.amount); a.n++; }));
@@ -297,7 +312,7 @@ $('#lXls').onclick = () => {
   const ws = XLSX.utils.aoa_to_sheet(aoa); ws['!cols'] = [12, 12, 13, 7, 10, 30, 9, 6, 12, 14, 8, 10, 30].map(w => ({ wch: w }));
   aoa[0].forEach((h, c) => { ws[XLSX.utils.encode_cell({ r: 0, c })].s = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '1F3864' } } }; });
   for (let r = 1; r < aoa.length; r++) [6, 8, 9].forEach(c => { const a = XLSX.utils.encode_cell({ r, c }); if (ws[a]) ws[a].z = '#,##0'; });
-  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, '입고내역'); XLSX.writeFile(wb, `입고내역_${S.vendor}_${$('#lMonth').value}.xlsx`);
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, '입고내역'); XLSX.writeFile(wb, `입고내역_${S.listAll ? '전체업체' : S.vendor}_${$('#lMonth').value}.xlsx`);
 };
 
 /* ================= 월 마감 ================= */
