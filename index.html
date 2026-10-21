@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TC 생산관리 · 외주 입고/월마감</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<!-- 로그인 -->
+<div id="vLogin" class="login hide">
+  <div class="lbox">
+    <div class="lhd">TC 생산관리 <span>외주 입고 · 월마감</span></div>
+    <div class="lbd">
+      <div class="ltabs"><button data-l="in" class="on">로그인</button><button data-l="up">계정 신청</button></div>
+      <form id="fLogin">
+        <label>이메일<input id="lEmail" type="email" required autocomplete="username"></label>
+        <label>비밀번호<input id="lPw" type="password" required autocomplete="current-password"></label>
+        <label class="up hide">이름<input id="lName" placeholder="예: 염윤정"></label>
+        <button class="pri" id="lBtn" type="submit">로그인</button>
+        <div class="lmsg" id="lMsg"></div>
+        <div class="muted small up hide">계정 신청 후 관리자 승인이 있어야 사용할 수 있습니다.</div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- 승인 대기 -->
+<div id="vPending" class="login hide">
+  <div class="lbox"><div class="lhd">TC 생산관리</div>
+    <div class="lbd"><b>승인 대기 중입니다.</b><p class="muted small">관리자가 [사용자] 메뉴에서 승인하면 사용할 수 있습니다.<br>승인 후 새로고침 하세요.</p>
+    <button id="pRefresh">새로고침</button> <button id="pOut">로그아웃</button></div></div>
+</div>
+
+<!-- 앱 -->
+<div id="vApp" class="hide">
+  <header class="gnb">
+    <div class="brand">TC 생산관리 <span>외주 입고 · 월마감</span></div>
+    <nav id="nav">
+      <a data-v="reg" class="on">입고 등록</a>
+      <a data-v="list">입고 내역</a>
+      <a data-v="close">월 마감</a>
+      <a data-v="master">기준정보</a>
+      <a data-v="users" class="adm">사용자</a>
+    </nav>
+    <div class="me"><span id="meName"></span><span id="meRole" class="tag t-mut"></span><button id="btnOut">로그아웃</button></div>
+  </header>
+  <div class="subnav" id="subnav"></div>
+
+  <main>
+    <!-- 입고 등록 -->
+    <section id="v-reg">
+      <div class="grid2">
+        <div class="card">
+          <h2 id="regTitle">입고 등록</h2>
+          <div class="frow">
+            <label>입고일<input type="date" id="rDate"></label>
+            <label>P/O No<input id="rPO" placeholder="PO26100001" maxlength="10" autocomplete="off"></label>
+            <label class="chk"><input type="checkbox" id="rPre"> 선등록 (출고대기·선입고)</label>
+          </div>
+          <div id="poMsg" class="small"></div>
+          <table class="lines" id="rLines">
+            <thead><tr><th style="width:42%">품목</th><th class="num" style="width:13%">수량</th><th style="width:6%">단위</th><th class="num" style="width:16%">단가</th><th class="num" style="width:17%">금액</th><th style="width:6%"></th></tr></thead>
+            <tbody></tbody>
+            <tfoot><tr><td colspan="4" class="num"><b>합계</b></td><td class="num"><b id="rTotal">0</b></td><td></td></tr></tfoot>
+          </table>
+          <button id="rAddLine" class="ghost">+ 품목 추가</button>
+          <label class="full">비고<input id="rNote" placeholder="예: 원자재 지연 선등록"></label>
+          <div class="note small">금액은 <b>입고일 기준 단가표 × 수량</b>으로 자동 계산됩니다. 단가를 직접 바꾸면 노란색으로 표시되고 마감 때 확인 대상이 됩니다.</div>
+          <div class="btns"><button class="pri" id="rSave">저장</button><button id="rReset">새로 입력</button><span id="rMsg" class="small"></span></div>
+        </div>
+        <div class="card">
+          <h2>최근 등록 <span class="muted small" style="font-weight:400">전체 담당자 · 최근 20건</span></h2>
+          <div class="tw" style="max-height:62vh"><table id="tRecent"></table></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 입고 내역 -->
+    <section id="v-list" class="hide">
+      <div class="card">
+        <div class="bar">
+          <label>월<input type="month" id="lMonth"></label>
+          <select id="lStaff"><option value="">담당자: 전체</option></select>
+          <select id="lItem"><option value="">품목: 전체</option></select>
+          <input id="lText" placeholder="PO번호 / 비고 검색" style="width:200px">
+          <span class="sp"></span>
+          <span class="muted small" id="lInfo"></span>
+          <button id="lXls">엑셀 저장</button>
+        </div>
+        <div class="kpis k4" id="lKpi"></div>
+        <div class="grid2 g73">
+          <div class="tw" style="max-height:64vh"><table id="tList"></table></div>
+          <div class="tw" style="max-height:64vh"><table id="tListSum"></table></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 월 마감 -->
+    <section id="v-close" class="hide">
+      <div class="card">
+        <div class="bar">
+          <label>마감월<input type="month" id="cMonth"></label>
+          <span class="muted small" id="cRegInfo"></span>
+          <span class="sp"></span>
+          <span id="cLockInfo" class="small"></span>
+        </div>
+        <div class="drops">
+          <div class="drop" id="dErp"><b>ERP 입고상세조회(S) <span class="tag t-bad">필수</span></b><div class="hint">ERP에서 다운받은 .xls 원본 그대로</div><div class="files"></div><input type="file" accept=".xls,.xlsx"></div>
+          <div class="drop" id="dVen"><b>업체 거래명세서 (대림) <span class="tag t-mut">선택</span></b><div class="hint">넣으면 ERP · 업체 · 입고등록 3자 대조</div><div class="files"></div><input type="file" accept=".xls,.xlsx"></div>
+          <div class="drop dis"><b>입고 등록 내역 <span class="tag t-ok">자동</span></b><div class="hint">이 시스템에 담당자들이 등록한 해당 월 입고를 자동으로 불러옵니다</div><div class="files" id="cRegFiles"></div></div>
+        </div>
+        <div id="cSheetsBox" class="hide" style="margin-top:10px"><div class="muted small" id="idxInfo"></div><div class="sheets" id="sheetList"></div></div>
+        <div class="btns"><button class="pri" id="btnRun" disabled>대조 실행</button><span class="muted small" id="runInfo">ERP 입고상세조회를 넣으면 실행할 수 있습니다</span></div>
+      </div>
+
+      <div class="kpis" id="kpis"></div>
+      <div class="card">
+        <div class="bar" style="justify-content:space-between">
+          <div class="tabs" id="tabs">
+            <button data-t="po" class="on">PO별 대조</button>
+            <button data-t="model">모델·품목군별 소계</button>
+            <button data-t="ven">업체 명세서 점검</button>
+            <button data-t="stf">입고 등록 점검</button>
+            <button data-t="hist">마감 이력</button>
+          </div>
+          <div><button id="btnXls" disabled>결과 엑셀 저장</button> <button class="pri" id="btnClose" disabled>마감 확정 (월 잠금)</button></div>
+        </div>
+        <div class="tabline">
+          <div id="t-po">
+            <div class="bar">
+              <select id="fStatus"><option value="">상태: 전체</option><option value="nok">불일치+확인필요</option><option value="bad">불일치만</option><option value="warn">확인필요만</option><option value="ok">일치만</option><option value="date">날짜 차이만</option></select>
+              <select id="fModel"><option value="">모델: 전체</option></select>
+              <input id="fText" placeholder="PO번호 / 담당자 / 내용 검색" style="width:220px">
+              <span class="muted small" id="poCount"></span>
+            </div>
+            <div class="tw"><table id="tPO"></table></div>
+          </div>
+          <div id="t-model" class="hide"><div class="tw"><table id="tModel"></table></div></div>
+          <div id="t-ven" class="hide"></div>
+          <div id="t-stf" class="hide"></div>
+          <div id="t-hist" class="hide"><div class="tw"><table id="tHist"></table></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 기준정보 -->
+    <section id="v-master" class="hide">
+      <div class="grid2 g64">
+        <div class="card">
+          <h2>품목 · 현재 단가 <span class="muted small" style="font-weight:400" id="mAdmHint"></span></h2>
+          <div class="tw" style="max-height:62vh"><table id="tItems"></table></div>
+          <div class="btns adm"><button id="mAddItem">+ 품목 추가</button></div>
+        </div>
+        <div class="card">
+          <h2>단가 이력 <span class="muted small" id="mPriceFor" style="font-weight:400"></span></h2>
+          <div class="adm frow" id="mPriceForm">
+            <label>품목<select id="pCode"></select></label>
+            <label>단가<input id="pPrice" type="number" step="1"></label>
+            <label>적용일<input id="pFrom" type="date"></label>
+            <label>비고<input id="pNote" placeholder="예: 2026년 11월 단가 변경"></label>
+            <button class="pri" id="pAdd" style="align-self:end">단가 등록</button>
+          </div>
+          <div class="note small">단가가 바뀌면 <b>새 적용일로 한 줄 추가</b>하세요. 입고 등록 시 입고일 기준으로 맞는 단가가 자동 적용됩니다.</div>
+          <div class="tw" style="max-height:44vh"><table id="tPrices"></table></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>ERP 모델 식별 마스터 <span class="muted small" style="font-weight:400">ERP PO 안에 대표부품이 있으면 해당 모델로 판단, 대수 = 대표부품 수량 ÷ 대당수량</span></h2>
+        <table id="master" class="edit"><thead><tr><th style="width:90px">ID</th><th>표시명</th><th>업체 명세서 표기</th><th style="width:150px">ERP 대표부품</th><th style="width:70px">대당수량</th><th>입고 품목명 표기</th><th style="width:36px"></th></tr></thead><tbody></tbody></table>
+        <button id="addModel" class="adm ghost">+ 모델 추가</button>
+        <div class="grid2" style="margin-top:12px">
+          <div><h3>단품 품목군</h3><table id="pgroups" class="edit"><thead><tr><th style="width:160px">품목군 이름</th><th>ERP 품번 (쉼표 구분)</th><th style="width:36px"></th></tr></thead><tbody></tbody></table><button id="addGroup" class="adm ghost">+ 품목군 추가</button></div>
+          <div><h3>품번 별칭 (업체 품번 → ERP 품번)</h3><table id="alias" class="edit"><thead><tr><th>업체 품번</th><th>ERP 품번</th><th style="width:36px"></th></tr></thead><tbody></tbody></table><button id="addAlias" class="adm ghost">+ 별칭 추가</button>
+            <h3>대조 설정</h3><div class="frow"><label>일자 허용 ±일<input id="sWin" type="number" min="0" max="31" style="width:80px"></label></div></div>
+        </div>
+        <div class="btns adm"><button class="pri" id="mSave">모델 마스터 저장</button><span id="mMsg" class="small"></span></div>
+      </div>
+    </section>
+
+    <!-- 사용자 -->
+    <section id="v-users" class="hide">
+      <div class="card">
+        <h2>사용자 관리</h2>
+        <div class="note small">계정 신청한 사용자를 <b>승인</b>해야 입력·조회할 수 있습니다. 관리자는 기준정보 수정, 다른 사람 입고 수정, 마감 잠금 해제가 가능합니다.</div>
+        <div class="tw"><table id="tUsers"></table></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="toast" class="toast hide"></div>
+
+<script src="lib/cpexcel.js"></script>
+<script src="lib/xlsx.bundle.js"></script>
+<script src="lib/supabase.js"></script>
+<script src="engine.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
