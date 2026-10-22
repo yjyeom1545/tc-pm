@@ -60,11 +60,12 @@
           </div>
           <div id="poMsg" class="small"></div>
           <table class="lines" id="rLines">
-            <thead><tr><th style="width:42%">품목</th><th class="num" style="width:13%">수량</th><th style="width:6%">단위</th><th class="num" style="width:16%">단가</th><th class="num" style="width:17%">금액</th><th style="width:6%"></th></tr></thead>
+            <thead><tr><th style="width:17%">품번</th><th style="width:31%">품목</th><th class="num" style="width:11%">수량</th><th style="width:5%">단위</th><th class="num" style="width:14%">단가</th><th class="num" style="width:16%">금액</th><th style="width:5%"></th></tr></thead>
             <tbody></tbody>
-            <tfoot><tr><td colspan="4" class="num"><b>합계</b></td><td class="num"><b id="rTotal">0</b></td><td></td></tr></tfoot>
+            <tfoot><tr><td colspan="5" class="num"><b>합계</b></td><td class="num"><b id="rTotal">0</b></td><td></td></tr></tfoot>
           </table>
-          <button id="rAddLine" class="ghost">+ 품목 추가</button>
+          <datalist id="dlParts"></datalist>
+          <button id="rAddLine" class="ghost">+ 품목 추가</button> <span class="muted small">품번을 입력하면 품목이 자동으로 선택됩니다 (예: 1272701, 237329GT)</span>
           <label class="full">비고<input id="rNote" placeholder="특이사항 (예: 단가 협의 건)"></label>
           <div class="note small">금액은 <b>입고일 기준 단가표 × 수량</b>으로 자동 계산됩니다. 단가를 직접 바꾸면 노란색으로 표시되고 마감 때 확인 대상이 됩니다.</div>
           <div class="btns"><button class="pri" id="rSave">저장</button><button id="rReset">새로 입력</button><span id="rMsg" class="small"></span></div>

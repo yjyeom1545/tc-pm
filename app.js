@@ -142,16 +142,39 @@ function itemOptions(sel) {
   const cats = [...new Set(pool.map(i => i.category))];
   return '<option value="">품목 선택</option>' + cats.map(c => `<optgroup label="${esc(c)}">` + pool.filter(i => i.category === c).map(i => `<option value="${esc(i.code)}" ${i.code === sel ? 'selected' : ''}>${esc(i.name)}${i.erp_part && !i.name.includes(i.erp_part) ? ' · ' + esc(i.erp_part) : ''}</option>`).join('') + '</optgroup>').join('');
 }
+const ptoks = it => [it.code, ...String(it.erp_part || '').split(/[\s\/(),]+/)].map(t => t.trim().toUpperCase()).filter(Boolean);
+function findByPart(v) {
+  v = String(v || '').trim().toUpperCase().replace(/\s+/g, ''); if (!v) return { list: [] };
+  const pool = vItems().filter(i => i.active);
+  let list = pool.filter(i => ptoks(i).includes(v));
+  if (!list.length && v.length >= 4) list = pool.filter(i => ptoks(i).some(t => t.startsWith(v)));
+  if (!list.length && v.length >= 2) list = pool.filter(i => i.name.toUpperCase().replace(/\s+/g, '').includes(v));
+  return { list };
+}
+function partLabel(it) { return it ? (String(it.erp_part || it.code).split(/[\s\/(]+/)[0]) : ''; }
+function fillPartList() { $('#dlParts').innerHTML = vItems().filter(i => i.active).map(i => `<option value="${esc(partLabel(i))}">${esc(i.name)}</option>`).join(''); }
 function addLine(l = {}) {
   const tr = document.createElement('tr');
-  tr.innerHTML = `<td><select class="lc">${itemOptions(l.code)}</select></td><td><input class="lq num" type="number" min="0" step="any" value="${l.qty ?? ''}"></td><td class="lu c muted"></td><td><input class="lp num" type="number" step="any" value="${l.unit_price ?? ''}"></td><td class="la num"></td><td class="x" title="삭제">✕</td>`;
+  tr.innerHTML = `<td><input class="lpn" list="dlParts" placeholder="품번" autocomplete="off" value="${esc(partLabel(S.itemMap[l.code]))}"><div class="lpm small"></div></td><td><select class="lc">${itemOptions(l.code)}</select></td><td><input class="lq num" type="number" min="0" step="any" value="${l.qty ?? ''}"></td><td class="lu c muted"></td><td><input class="lp num" type="number" step="any" value="${l.unit_price ?? ''}"></td><td class="la num"></td><td class="x" title="삭제">✕</td>`;
   $('#rLines tbody').appendChild(tr);
   tr.dataset.ovr = l.overridden ? '1' : '';
-  const sel = tr.querySelector('.lc'), q = tr.querySelector('.lq'), p = tr.querySelector('.lp');
-  sel.onchange = () => { tr.dataset.ovr = ''; autoPrice(tr); calc(); q.focus(); };
+  const sel = tr.querySelector('.lc'), q = tr.querySelector('.lq'), p = tr.querySelector('.lp'), pn = tr.querySelector('.lpn'), pm = tr.querySelector('.lpm');
+  sel.onchange = () => { tr.dataset.ovr = ''; pn.value = partLabel(S.itemMap[sel.value]); pm.textContent = ''; autoPrice(tr); calc(); q.focus(); };
+  const applyPart = final => {
+    const { list } = findByPart(pn.value);
+    if (!pn.value.trim()) { pm.textContent = ''; return; }
+    if (list.length === 1) {
+      if (sel.value !== list[0].code) { sel.value = list[0].code; tr.dataset.ovr = ''; autoPrice(tr); calc(); }
+      pm.innerHTML = ''; if (final) { const v = pn.value.trim().toUpperCase(); pn.value = ptoks(list[0]).includes(v) && v !== list[0].code.toUpperCase() ? v : partLabel(list[0]); q.focus(); }
+    } else if (list.length > 1) { pm.innerHTML = `<span class="err">${list.length}개 해당 — 품목에서 선택</span>`; }
+    else { pm.innerHTML = `<span class="err">${esc(S.vendor)} 품목에 없는 품번</span>`; if (final) { sel.value = ''; autoPrice(tr); calc(); } }
+  };
+  pn.oninput = () => applyPart(false);
+  pn.onchange = () => applyPart(true);
+  pn.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); applyPart(true); } };
   q.oninput = calc;
   p.oninput = () => { tr.dataset.ovr = Number(p.value) !== priceFor(sel.value, $('#rDate').value) ? '1' : ''; calc(); };
-  tr.querySelector('.x').onclick = () => { if ($('#rLines tbody').children.length === 1) { tr.querySelector('.lc').value = ''; tr.querySelector('.lq').value = ''; tr.querySelector('.lp').value = ''; tr.dataset.ovr = ''; } else tr.remove(); calc(); };
+  tr.querySelector('.x').onclick = () => { if ($('#rLines tbody').children.length === 1) { tr.querySelector('.lc').value = ''; tr.querySelector('.lpn').value = ''; tr.querySelector('.lpm').textContent = ''; tr.querySelector('.lq').value = ''; tr.querySelector('.lp').value = ''; tr.dataset.ovr = ''; } else tr.remove(); calc(); };
   if (!l.unit_price) autoPrice(tr);
   calc();
   return tr;
@@ -173,7 +196,7 @@ function calc() {
   });
   $('#rTotal').textContent = fmt(tot);
 }
-$('#rAddLine').onclick = () => addLine().querySelector('.lc').focus();
+$('#rAddLine').onclick = () => addLine().querySelector('.lpn').focus();
 $('#rDate').onchange = () => { $$('#rLines tbody tr').forEach(autoPrice); calc(); checkPO(); loadRecent(); };
 let poTimer;
 $('#rPO').oninput = () => { $('#rPO').value = $('#rPO').value.toUpperCase().replace(/\s/g, ''); clearTimeout(poTimer); poTimer = setTimeout(checkPO, 250); };
@@ -191,7 +214,7 @@ function resetForm() {
   S.editId = null; $('#regTitle').textContent = '입고 등록 — ' + (S.vendor || '');
   $('#rPO').value = ''; $('#rNote').value = ''; $('#poMsg').innerHTML = ''; $('#rMsg').textContent = '';
   if (!$('#rDate').value) $('#rDate').value = today();
-  $('#rLines tbody').innerHTML = ''; addLine();
+  fillPartList(); $('#rLines tbody').innerHTML = ''; addLine();
   $('#rSave').textContent = '저장'; $('#rReset').textContent = '새로 입력';
 }
 $('#rReset').onclick = () => { resetForm(); $('#rPO').focus(); };
