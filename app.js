@@ -661,12 +661,14 @@ $('#mSave').onclick = async () => {
 
 let bomVer = null;
 function renderBomMaster() {
+  const vlist = vItems(), withBom = new Set(S.bom.map(b => b.item_code));
+  $('#bItem').innerHTML = '<option value="">품목 선택</option>' + vlist.map(i => `<option value="${esc(i.code)}" ${i.code === selItem ? 'selected' : ''}>${esc(i.name)}${withBom.has(i.code) ? '' : ' (BOM 없음)'}</option>`).join('');
   const it = S.itemMap[selItem];
-  if (!it) { $('#mBomFor').textContent = '— 왼쪽 품목 표에서 품목을 누르세요'; $('#mBomInfo').innerHTML = ''; $('#tBom').innerHTML = ''; return; }
+  if (!it) { $('#mBomFor').textContent = '품목을 고르거나 위 품목 표에서 행을 누르세요'; $('#mBomInfo').innerHTML = ''; $('#tBom').innerHTML = ''; return; }
   const rows = S.bom.filter(b => b.item_code === selItem);
   const vers = [...new Set(rows.map(b => b.valid_from))].sort().reverse();
   if (!vers.includes(bomVer)) bomVer = vers[0] || null;
-  $('#mBomFor').textContent = '— ' + it.name;
+  $('#mBomFor').textContent = '';
   if (!$('#bFrom').value) $('#bFrom').value = today();
   if (!vers.length) { $('#mBomInfo').innerHTML = '<span class="muted">등록된 BOM이 없습니다. 단품이면 BOM 없이 품목 자체가 1줄로 등록됩니다.</span>'; $('#tBom').innerHTML = ''; return; }
   const parts = rows.filter(b => b.valid_from === bomVer).sort((a, b) => a.seq - b.seq);
@@ -679,6 +681,7 @@ function renderBomMaster() {
     parts.map(p => `<tr><td class="num muted">${p.seq}</td><td>${esc(p.part)}</td><td class="small">${esc(p.part_name || '')}</td><td class="num">${fmt(p.per_qty)}</td><td class="num">${fmt(p.unit_price)}</td><td class="num">${fmt(p.per_qty * p.unit_price)}</td></tr>`).join('') + '</tbody>';
 }
 let bomParsed = [];
+$('#bItem').onchange = () => { selItem = $('#bItem').value || null; if (selItem) $('#pCode').value = selItem; renderMaster(); $('#bPaste').oninput(); };
 $('#bPaste').oninput = () => {
   bomParsed = [];
   const lines = $('#bPaste').value.split(/\r?\n/).map(x => x.split('\t').map(c => c.trim())).filter(c => c.some(Boolean));
