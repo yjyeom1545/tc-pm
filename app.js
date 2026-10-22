@@ -74,12 +74,14 @@ function show(v) { $('#vLogin').classList.toggle('hide', v !== 'login'); $('#vPe
 
 /* ================= 기준정보 로드 ================= */
 async function loadRefs() {
-  const [it, pr, cf, vd] = await Promise.all([
+  const [it, pr, cf, vd, bm] = await Promise.all([
     sb.from('pm_items').select('*').order('sort'),
     sb.from('pm_prices').select('*').order('valid_from', { ascending: false }),
     sb.from('pm_config').select('*').eq('id', 'master').maybeSingle(),
-    sb.from('pm_vendors').select('*').order('sort')
+    sb.from('pm_vendors').select('*').order('sort'),
+    sb.from('pm_bom').select('*').order('item_code').order('valid_from').order('seq').limit(5000)
   ]);
+  S.bom = bm.data || [];
   S.vendors = vd.data || [];
   const act = S.vendors.filter(v => v.active);
   if (!S.vendor) { let saved = null; try { saved = localStorage.getItem(LSV); } catch (e) {} S.vendor = (act.find(v => v.name === saved) || act[0] || { name: '대림에스앤티' }).name; }
@@ -172,7 +174,50 @@ function calc() {
     const a = Math.round(q * p); tr.querySelector('.la').textContent = fmt(a); tot += a;
   });
   $('#rTotal').textContent = fmt(tot);
+  renderBom();
 }
+function bomFor(code, date) {
+  const rows = S.bom.filter(b => b.item_code === code && b.valid_from <= (date || today()));
+  if (!rows.length) return null;
+  const vf = rows.reduce((m, b) => b.valid_from > m ? b.valid_from : m, '');
+  return { valid_from: vf, parts: rows.filter(b => b.valid_from === vf).sort((a, b) => a.seq - b.seq) };
+}
+let bomRows = [];
+function renderBom() {
+  const date = $('#rDate').value;
+  const lines = $$('#rLines tbody tr').map(tr => ({ code: tr.querySelector('.lc').value, qty: Number(tr.querySelector('.lq').value) || 0, price: Number(tr.querySelector('.lp').value) || 0, ovr: tr.dataset.ovr === '1' })).filter(l => l.code && l.qty > 0);
+  bomRows = [];
+  if (!lines.length) { $('#bomBody').innerHTML = '<div class="muted small" style="padding:14px;text-align:center">품목과 수량을 입력하면 여기에 ERP 등록용 부품 목록이 나옵니다.</div>'; $('#bomCopy').disabled = true; return; }
+  let html = '', grand = 0;
+  for (const l of lines) {
+    const it = S.itemMap[l.code] || {}, b = bomFor(l.code, date), lineAmt = Math.round(l.qty * l.price);
+    let parts;
+    if (b) parts = b.parts.map(p => ({ part: p.part, name: p.part_name || '', per: Number(p.per_qty), qty: Number(p.per_qty) * l.qty, price: Number(p.unit_price) }));
+    else parts = [{ part: String(it.erp_part || l.code).split(/[\s\/(]+/)[0], name: it.name || '', per: 1, qty: l.qty, price: l.price }];
+    parts.forEach(p => p.amt = Math.round(p.qty * p.price));
+    const sum = parts.reduce((a, p) => a + p.amt, 0); grand += sum;
+    const ok = sum === lineAmt;
+    bomRows.push(...parts);
+    html += `<div class="bomgrp"><div class="bomhd"><b>${esc(it.name || l.code)}</b> × ${fmt(l.qty)}${esc(it.unit || '')} <span class="muted">${b ? `BOM ${b.parts.length}품목 · 적용 ${esc(b.valid_from)}` : 'BOM 없음 — 품목 자체를 1줄로 등록'}</span>
+      <span class="sp"></span>${ok ? '<span class="tag t-ok">합계 일치</span>' : `<span class="tag t-bad">BOM 합계 ${fmt(sum)} ≠ 입고 금액 ${fmt(lineAmt)}</span>`}
+      <button class="bcopy" data-i="${bomRows.length - parts.length}" data-n="${parts.length}">이 모델만 복사</button></div>
+      <table class="bomt"><thead><tr><th class="num" style="width:40px">No</th><th style="width:150px">품번</th><th>품명</th><th class="num" style="width:70px">대당</th><th class="num" style="width:90px">수량</th><th class="num" style="width:110px">단가</th><th class="num" style="width:130px">금액</th></tr></thead><tbody>
+      ${parts.map((p, i) => `<tr><td class="num muted">${i + 1}</td><td class="nw">${esc(p.part)}</td><td class="small">${esc(p.name)}</td><td class="num">${fmt(p.per)}</td><td class="num"><b>${fmt(p.qty)}</b></td><td class="num">${fmt(p.price)}</td><td class="num">${fmt(p.amt)}</td></tr>`).join('')}
+      </tbody><tfoot><tr><td colspan="6" class="num"><b>소계</b></td><td class="num"><b>${fmt(sum)}</b></td></tr></tfoot></table>
+      ${!ok && l.ovr ? '<div class="small err">단가를 직접 수정한 줄이라 BOM 단가와 다릅니다. ERP 등록 단가를 확인하세요.</div>' : (!ok && b ? '<div class="small err">단가표와 BOM 단가가 맞지 않습니다 — 기준정보에서 새 단가의 BOM을 등록해 주세요.</div>' : '')}</div>`;
+  }
+  html += `<div class="bomtot">ERP 등록 합계 <b>${fmt(grand)}</b>원 · ${bomRows.length}줄</div>`;
+  $('#bomBody').innerHTML = html; $('#bomCopy').disabled = false;
+  $('#bomBody').querySelectorAll('.bcopy').forEach(b => b.onclick = () => copyRows(bomRows.slice(+b.dataset.i, +b.dataset.i + +b.dataset.n)));
+}
+async function copyRows(rows) {
+  const withName = $('#bomName').checked;
+  const txt = rows.map(p => (withName ? [p.part, p.name, p.qty, p.price] : [p.part, p.qty, p.price]).join('\t')).join('\n');
+  try { await navigator.clipboard.writeText(txt); }
+  catch (e) { const ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
+  toast(`${rows.length}줄 복사했습니다 — ERP 입력 화면에 붙여넣으세요`);
+}
+$('#bomCopy').onclick = () => copyRows(bomRows);
 $('#rAddLine').onclick = () => addLine().querySelector('.lc').focus();
 $('#rDate').onchange = () => { $$('#rLines tbody tr').forEach(autoPrice); calc(); checkPO(); loadRecent(); };
 let poTimer;
@@ -533,7 +578,7 @@ function renderMaster() {
   $('#tPrices').innerHTML = '<thead><tr><th>품목</th><th class="num">단가</th><th>적용일</th><th>비고</th>' + (adm ? '<th></th>' : '') + '</tr></thead><tbody>' +
     ps.map(p => `<tr><td>${esc(S.itemMap[p.code]?.name || p.code)}</td><td class="num">${fmt(p.price)}</td><td class="nw">${esc(p.valid_from)}${p.valid_from > today() ? ' <span class="tag t-date">예정</span>' : ''}</td><td class="small">${esc(p.note || '')}</td>${adm ? `<td><span class="x" data-pid="${p.id}">✕</span></td>` : ''}</tr>`).join('') + '</tbody>';
   $('#tPrices').querySelectorAll('[data-pid]').forEach(x => x.onclick = async () => { if (!confirm('이 단가 이력을 삭제할까요?')) return; const { error } = await sb.from('pm_prices').delete().eq('id', x.dataset.pid); if (error) return toast(krErr(error.message), 1); await loadRefs(); renderMaster(); });
-  renderEngineMaster(); renderVendors();
+  renderEngineMaster(); renderVendors(); renderBomMaster();
 }
 $('#pAdd').onclick = async () => {
   const row = { code: $('#pCode').value, price: Number($('#pPrice').value), valid_from: $('#pFrom').value, note: $('#pNote').value.trim() || null };
@@ -581,6 +626,54 @@ $('#mSave').onclick = async () => {
   if (error) return toast(krErr(error.message), 1); toast('모델 마스터 저장'); renderEngineMaster();
 };
 
+let bomVer = null;
+function renderBomMaster() {
+  const it = S.itemMap[selItem];
+  if (!it) { $('#mBomFor').textContent = '— 왼쪽 품목 표에서 품목을 누르세요'; $('#mBomInfo').innerHTML = ''; $('#tBom').innerHTML = ''; return; }
+  const rows = S.bom.filter(b => b.item_code === selItem);
+  const vers = [...new Set(rows.map(b => b.valid_from))].sort().reverse();
+  if (!vers.includes(bomVer)) bomVer = vers[0] || null;
+  $('#mBomFor').textContent = '— ' + it.name;
+  if (!$('#bFrom').value) $('#bFrom').value = today();
+  if (!vers.length) { $('#mBomInfo').innerHTML = '<span class="muted">등록된 BOM이 없습니다. 단품이면 BOM 없이 품목 자체가 1줄로 등록됩니다.</span>'; $('#tBom').innerHTML = ''; return; }
+  const parts = rows.filter(b => b.valid_from === bomVer).sort((a, b) => a.seq - b.seq);
+  const sum = parts.reduce((a, p) => a + Number(p.per_qty) * Number(p.unit_price), 0);
+  const price = (S.prices.filter(p => p.code === selItem && p.valid_from <= bomVer).sort((a, b) => b.valid_from.localeCompare(a.valid_from))[0] || {}).price;
+  $('#mBomInfo').innerHTML = `적용일 <select id="bVer">${vers.map(v => `<option ${v === bomVer ? 'selected' : ''}>${v}</option>`).join('')}</select> · ${parts.length}품목 · BOM 합계 <b>${fmt(sum)}</b>원 ` +
+    (price != null ? (Math.round(sum) === Number(price) ? `<span class="tag t-ok">단가표 ${fmt(price)} 일치</span>` : `<span class="tag t-bad">단가표 ${fmt(price)}와 ${fmt(sum - price)} 차이</span>`) : '');
+  $('#bVer').onchange = () => { bomVer = $('#bVer').value; renderBomMaster(); };
+  $('#tBom').innerHTML = '<thead><tr><th class="num">No</th><th>품번</th><th>품명</th><th class="num">대당수량</th><th class="num">단품단가</th><th class="num">대당 금액</th></tr></thead><tbody>' +
+    parts.map(p => `<tr><td class="num muted">${p.seq}</td><td>${esc(p.part)}</td><td class="small">${esc(p.part_name || '')}</td><td class="num">${fmt(p.per_qty)}</td><td class="num">${fmt(p.unit_price)}</td><td class="num">${fmt(p.per_qty * p.unit_price)}</td></tr>`).join('') + '</tbody>';
+}
+let bomParsed = [];
+$('#bPaste').oninput = () => {
+  bomParsed = [];
+  const lines = $('#bPaste').value.split(/\r?\n/).map(x => x.split('\t').map(c => c.trim())).filter(c => c.some(Boolean));
+  const num = v => Number(String(v).replace(/,/g, ''));
+  for (const c of lines) {
+    let p;
+    if (c.length >= 4) p = { part: c[0], name: c[1], per: num(c[2]), price: num(c[3]) };
+    else if (c.length === 3) p = { part: c[0], name: '', per: num(c[1]), price: num(c[2]) };
+    else continue;
+    if (!p.part || !(p.per > 0) || isNaN(p.price)) continue;
+    bomParsed.push(p);
+  }
+  const sum = bomParsed.reduce((a, p) => a + p.per * p.price, 0);
+  const price = selItem ? priceFor(selItem, $('#bFrom').value) : null;
+  $('#bPreview').innerHTML = bomParsed.length ? `${bomParsed.length}품목 인식 · 합계 <b>${fmt(sum)}</b>원` + (price != null ? (Math.round(sum) === price ? ` <span class="tag t-ok">적용일 단가 ${fmt(price)} 일치</span>` : ` <span class="tag t-bad">적용일 단가 ${fmt(price)}와 ${fmt(sum - price)} 차이</span>`) : '') : '<span class="muted">붙여넣은 내용에서 품번·대당수량·단가를 찾지 못했습니다</span>';
+  $('#bSave').disabled = !bomParsed.length || !selItem;
+};
+$('#bFrom').onchange = () => $('#bPaste').oninput();
+$('#bSave').onclick = async () => {
+  const vf = $('#bFrom').value; if (!selItem || !vf || !bomParsed.length) return;
+  const exists = S.bom.some(b => b.item_code === selItem && b.valid_from === vf);
+  if (!confirm(`${S.itemMap[selItem].name} BOM ${bomParsed.length}품목을 적용일 ${vf}로 저장할까요?` + (exists ? '\n(같은 적용일 BOM이 있어 교체됩니다)' : ''))) return;
+  if (exists) { const d = await sb.from('pm_bom').delete().eq('item_code', selItem).eq('valid_from', vf); if (d.error) return toast(krErr(d.error.message), 1); }
+  const { error } = await sb.from('pm_bom').insert(bomParsed.map((p, i) => ({ item_code: selItem, valid_from: vf, seq: i + 1, part: p.part, part_name: p.name || null, per_qty: p.per, unit_price: p.price })));
+  if (error) return toast(krErr(error.message), 1);
+  toast('BOM 저장'); $('#bPaste').value = ''; $('#bPreview').innerHTML = ''; $('#bSave').disabled = true; bomVer = vf;
+  await loadRefs(); renderMaster();
+};
 function renderVendors() {
   const adm = S.prof.role === 'admin';
   $('#tVendors tbody').innerHTML = S.vendors.map(v => `<tr data-v="${esc(v.name)}"><td>${esc(v.name)}</td><td><input class="ve" data-k="erp_code" value="${esc(v.erp_code || '')}"></td><td><input class="ve" data-k="sort" value="${v.sort}"></td><td class="c">${adm ? `<input type="checkbox" class="ve" data-k="active" ${v.active ? 'checked' : ''} style="width:auto">` : (v.active ? 'Y' : '')}</td><td>${adm ? '<button class="vsave">저장</button>' : ''}</td></tr>`).join('');

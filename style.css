@@ -108,3 +108,11 @@ body:not(.admin) table.edit input{pointer-events:none}
 .toast.err{background:var(--bad)}
 pre{white-space:pre-wrap;margin:0;font-family:inherit}
 @media (max-width:1000px){.grid2,.grid2.g73,.grid2.g64,.drops{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}.brand span{display:none}nav a{padding:0 9px}}
+
+.bomgrp{border:1px solid var(--line);border-radius:6px;margin-bottom:10px;overflow:hidden}
+.bomhd{display:flex;align-items:center;gap:10px;padding:7px 10px;background:#f0f4fa;border-bottom:1px solid var(--line);font-size:13px}
+.bomhd .sp{flex:1}
+.bomhd button{padding:3px 10px;font-size:12px}
+table.bomt{border:0}table.bomt th,table.bomt td{border-left:0;border-right:0;padding:4px 8px}
+table.bomt tfoot td{background:#fafbfd}
+.bomtot{text-align:right;font-size:13px;padding:4px 2px}

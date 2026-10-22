@@ -75,6 +75,15 @@
           <div class="tw" style="max-height:62vh"><table id="tRecent"></table></div>
         </div>
       </div>
+      <div class="card" id="bomCard">
+        <div class="bar" style="align-items:center;margin-bottom:6px">
+          <h2 style="margin:0">ERP 등록용 BOM <span class="muted small" style="font-weight:400">품목·수량을 넣으면 모델별 구성 부품의 품번·수량·단가가 펼쳐집니다</span></h2>
+          <span class="sp"></span>
+          <label class="chk" style="padding:0"><input type="checkbox" id="bomName"> 품명 포함</label>
+          <button class="pri" id="bomCopy">전체 복사 (품번 · 수량 · 단가)</button>
+        </div>
+        <div id="bomBody"></div>
+      </div>
     </section>
 
     <!-- 입고 내역 -->
@@ -166,6 +175,19 @@
           </div>
           <div class="note small">단가가 바뀌면 <b>새 적용일로 한 줄 추가</b>하세요. 입고 등록 시 입고일 기준으로 맞는 단가가 자동 적용됩니다.</div>
           <div class="tw" style="max-height:44vh"><table id="tPrices"></table></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>BOM (ERP 등록 구성) <span class="muted small" id="mBomFor" style="font-weight:400"></span></h2>
+        <div id="mBomInfo" class="small" style="margin-bottom:6px"></div>
+        <div class="tw" style="max-height:44vh"><table id="tBom"></table></div>
+        <div class="adm" style="margin-top:10px">
+          <h3>새 BOM 등록 (단가 변경 시)</h3>
+          <div class="note small">엑셀 단가표에서 <b>품번 · 대당수량 · 단품단가</b> 3열(또는 품번 · 품명 · 대당수량 · 단품단가 4열)을 복사해 붙여넣으세요. 적용일은 새 단가의 적용일과 같게 넣으면 됩니다.</div>
+          <div class="frow"><label>적용일<input type="date" id="bFrom"></label></div>
+          <textarea id="bPaste" rows="6" style="width:100%;font-family:Consolas,monospace;font-size:12px;border:1px solid var(--line);border-radius:4px;padding:6px" placeholder="120033	1	148406&#10;233487	1	58960&#10;..."></textarea>
+          <div id="bPreview" class="small" style="margin-top:6px"></div>
+          <div class="btns"><button class="pri" id="bSave" disabled>BOM 저장</button></div>
         </div>
       </div>
       <div class="card">
