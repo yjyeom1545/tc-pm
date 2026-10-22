@@ -596,13 +596,24 @@ function renderMaster() {
   const adm = S.prof.role === 'admin';
   $('#mAdmHint').textContent = adm ? '이름·정렬·사용여부는 셀을 고친 뒤 [저장]' : '조회 전용 (수정은 관리자)';
   $('#tItems').innerHTML = '<thead><tr><th>코드</th><th>품목명</th><th>ERP 품번</th><th>구분</th><th>단위</th><th class="num">현재 단가</th><th>적용일</th><th class="num">정렬</th><th class="c">사용</th>' + (adm ? '<th></th>' : '') + '</tr></thead><tbody>' +
-    vItems().map(i => { const p = S.prices.filter(x => x.code === i.code && x.valid_from <= today()).sort((a, b) => b.valid_from.localeCompare(a.valid_from))[0]; return `<tr class="clk ${selItem === i.code ? 'sel' : ''}" data-c="${esc(i.code)}"><td class="nw">${esc(i.code)}</td><td>${adm ? `<input class="ie" data-k="name" value="${esc(i.name)}" style="width:100%">` : esc(i.name)}</td><td>${adm ? `<input class="ie" data-k="erp_part" value="${esc(i.erp_part || '')}" style="width:110px">` : esc(i.erp_part || '')}</td><td>${esc(i.category)}</td><td>${esc(i.unit)}</td><td class="num">${p ? fmt(p.price) : '<span class="err">없음</span>'}</td><td class="nw small">${p ? esc(p.valid_from) : ''}</td><td class="num">${adm ? `<input class="ie" data-k="sort" value="${i.sort}" style="width:50px;text-align:right">` : i.sort}</td><td class="c">${adm ? `<input type="checkbox" class="ie" data-k="active" ${i.active ? 'checked' : ''}>` : (i.active ? 'Y' : '')}</td>${adm ? '<td><button class="isave">저장</button></td>' : ''}</tr>`; }).join('') + '</tbody>';
+    vItems().map(i => { const p = S.prices.filter(x => x.code === i.code && x.valid_from <= today()).sort((a, b) => b.valid_from.localeCompare(a.valid_from))[0]; return `<tr class="clk ${selItem === i.code ? 'sel' : ''}" data-c="${esc(i.code)}"><td class="nw">${esc(i.code)}</td><td>${adm ? `<input class="ie" data-k="name" value="${esc(i.name)}" style="width:100%">` : esc(i.name)}</td><td>${adm ? `<input class="ie" data-k="erp_part" value="${esc(i.erp_part || '')}" style="width:110px">` : esc(i.erp_part || '')}</td><td>${esc(i.category)}</td><td>${esc(i.unit)}</td><td class="num">${p ? fmt(p.price) : '<span class="err">없음</span>'}</td><td class="nw small">${p ? esc(p.valid_from) : ''}</td><td class="num">${adm ? `<input class="ie" data-k="sort" value="${i.sort}" style="width:50px;text-align:right">` : i.sort}</td><td class="c">${adm ? `<input type="checkbox" class="ie" data-k="active" ${i.active ? 'checked' : ''}>` : (i.active ? 'Y' : '')}</td>${adm ? '<td class="nw"><button class="isave">저장</button> <button class="idel" title="입고에 쓰이지 않은 품목만 삭제됩니다">삭제</button></td>' : ''}</tr>`; }).join('') + '</tbody>';
   $('#tItems').querySelectorAll('tr.clk').forEach(tr => tr.onclick = e => { if (e.target.closest('input,button')) return; selItem = tr.dataset.c; $('#pCode').value = selItem; renderMaster(); });
   $('#tItems').querySelectorAll('.isave').forEach(b => b.onclick = async () => {
     const tr = b.closest('tr'), code = tr.dataset.c, upd = {};
     tr.querySelectorAll('.ie').forEach(x => upd[x.dataset.k] = x.type === 'checkbox' ? x.checked : x.dataset.k === 'sort' ? Number(x.value) || 0 : x.value.trim());
     const { error } = await sb.from('pm_items').update(upd).eq('code', code);
     if (error) return toast(krErr(error.message), 1); toast('품목 저장'); await loadRefs(); renderMaster();
+  });
+  $('#tItems').querySelectorAll('.idel').forEach(b => b.onclick = async () => {
+    const code = b.closest('tr').dataset.c, it = S.itemMap[code];
+    const { count } = await sb.from('pm_receipt_lines').select('id', { count: 'exact', head: true }).eq('code', code);
+    if (count) return toast(`${it.name}은(는) 입고 ${count}건에 쓰여 삭제할 수 없습니다. '사용'을 끄면 목록에서 숨겨집니다.`, 1);
+    if (!confirm(`${it.name} (${code}) 품목을 삭제할까요?\n단가 이력과 BOM도 함께 삭제됩니다.`)) return;
+    for (const [t, k] of [['pm_bom', 'item_code'], ['pm_prices', 'code'], ['pm_items', 'code']]) {
+      const { error } = await sb.from(t).delete().eq(k, code); if (error) return toast(krErr(error.message), 1);
+    }
+    if (selItem === code) selItem = null;
+    toast('삭제했습니다'); await loadRefs(); renderMaster(); initItemFilters();
   });
   $('#pCode').innerHTML = vItems().map(i => `<option value="${esc(i.code)}" ${i.code === selItem ? 'selected' : ''}>${esc(i.name)}</option>`).join('');
   if (!$('#pFrom').value) $('#pFrom').value = today();
