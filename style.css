@@ -40,7 +40,7 @@ nav a.on{color:#fff;border-bottom-color:#fff}
 .vsel{flex-direction:row;align-items:center;gap:6px;font-weight:700;color:var(--navy)}
 .vsel select{font-weight:700;border-color:var(--navy);min-width:150px}
 .subnav b{color:var(--navy)}
-main{padding:14px 20px;max-width:1560px;margin:0 auto}
+main{padding:14px 20px;max-width:none;margin:0}
 .card{background:#fff;border:1px solid var(--line);border-radius:6px;padding:14px 16px;margin-bottom:14px}
 .card h2{font-size:14px;margin:0 0 10px;color:var(--navy)}
 h3{font-size:13px;color:var(--navy);margin:14px 0 6px}
@@ -116,3 +116,17 @@ pre{white-space:pre-wrap;margin:0;font-family:inherit}
 table.bomt{border:0}table.bomt th,table.bomt td{border-left:0;border-right:0;padding:4px 8px}
 table.bomt tfoot td{background:#fafbfd}
 .bomtot{text-align:right;font-size:13px;padding:4px 2px}
+
+.grid3{display:grid;grid-template-columns:minmax(380px,1fr) minmax(480px,1.35fr) minmax(360px,1fr);gap:14px;align-items:stretch}
+.grid3 > .card{margin-bottom:0;min-width:0}
+.col-scroll{display:flex;flex-direction:column;height:calc(100vh - 128px);min-height:520px}
+.col-scroll .scrollbody{flex:1;overflow:auto;max-height:none}
+.bomtop{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.copybar{margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.copybar button{padding:5px 10px}
+.vsep{width:1px;height:20px;background:var(--line);margin:0 4px}
+table.bomt th.cc{cursor:pointer;color:var(--navy);text-decoration:underline dotted}
+table.bomt th.cc:hover{background:#dfe6f2}
+.bomgrp .bomhd{flex-wrap:wrap}
+@media (max-width:1300px){.grid3{grid-template-columns:1fr}.col-scroll{height:auto}.col-scroll .scrollbody{max-height:70vh}}
+table.lines input.num{padding:5px 4px}

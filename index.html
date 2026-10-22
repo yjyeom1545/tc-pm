@@ -50,7 +50,7 @@
   <main>
     <!-- 입고 등록 -->
     <section id="v-reg">
-      <div class="grid2">
+      <div class="grid3">
         <div class="card">
           <h2 id="regTitle">입고 등록</h2>
           <div class="frow">
@@ -60,7 +60,7 @@
           </div>
           <div id="poMsg" class="small"></div>
           <table class="lines" id="rLines">
-            <thead><tr><th style="width:42%">품목</th><th class="num" style="width:13%">수량</th><th style="width:6%">단위</th><th class="num" style="width:16%">단가</th><th class="num" style="width:17%">금액</th><th style="width:6%"></th></tr></thead>
+            <thead><tr><th style="width:36%">품목</th><th class="num" style="width:11%">수량</th><th style="width:6%">단위</th><th class="num" style="width:20%">단가</th><th class="num" style="width:21%">금액</th><th style="width:6%"></th></tr></thead>
             <tbody></tbody>
             <tfoot><tr><td colspan="4" class="num"><b>합계</b></td><td class="num"><b id="rTotal">0</b></td><td></td></tr></tfoot>
           </table>
@@ -69,20 +69,27 @@
           <div class="note small">금액은 <b>입고일 기준 단가표 × 수량</b>으로 자동 계산됩니다. 단가를 직접 바꾸면 노란색으로 표시되고 마감 때 확인 대상이 됩니다.</div>
           <div class="btns"><button class="pri" id="rSave">저장</button><button id="rReset">새로 입력</button><span id="rMsg" class="small"></span></div>
         </div>
-        <div class="card">
+        <div class="card col-scroll" id="bomCard">
+          <div class="bomtop">
+            <h2 style="margin:0">ERP 등록용 BOM</h2>
+            <div class="copybar">
+              <span class="muted small">열 복사</span>
+              <button class="ccol" data-col="part" disabled>품번</button>
+              <button class="ccol" data-col="qty" disabled>수량</button>
+              <button class="ccol" data-col="price" disabled>단가</button>
+              <span class="vsep"></span>
+              <label class="chk" style="padding:0"><input type="checkbox" id="bomName"> 품명 포함</label>
+              <button class="pri" id="bomCopy" disabled>전체 복사</button>
+            </div>
+          </div>
+          <div class="muted small" style="margin:4px 0 8px">품목·수량을 넣으면 모델별 구성 부품이 펼쳐집니다. 열 머리글(품번·수량·단가)을 누르면 그 모델의 해당 열만 복사됩니다.</div>
+          <div id="bomBody" class="scrollbody"></div>
+        </div>
+        <div class="card col-scroll">
           <h2 id="recentTitle">등록 현황</h2>
           <div class="muted small" style="margin:-4px 0 8px">입고일이 속한 달의 등록 내역입니다. 중복·누락 확인용이며, 행을 누르면 수정할 수 있습니다.</div>
-          <div class="tw" style="max-height:62vh"><table id="tRecent"></table></div>
+          <div class="tw scrollbody"><table id="tRecent"></table></div>
         </div>
-      </div>
-      <div class="card" id="bomCard">
-        <div class="bar" style="align-items:center;margin-bottom:6px">
-          <h2 style="margin:0">ERP 등록용 BOM <span class="muted small" style="font-weight:400">품목·수량을 넣으면 모델별 구성 부품의 품번·수량·단가가 펼쳐집니다</span></h2>
-          <span class="sp"></span>
-          <label class="chk" style="padding:0"><input type="checkbox" id="bomName"> 품명 포함</label>
-          <button class="pri" id="bomCopy">전체 복사 (품번 · 수량 · 단가)</button>
-        </div>
-        <div id="bomBody"></div>
       </div>
     </section>
 

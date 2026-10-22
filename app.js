@@ -187,7 +187,7 @@ function renderBom() {
   const date = $('#rDate').value;
   const lines = $$('#rLines tbody tr').map(tr => ({ code: tr.querySelector('.lc').value, qty: Number(tr.querySelector('.lq').value) || 0, price: Number(tr.querySelector('.lp').value) || 0, ovr: tr.dataset.ovr === '1' })).filter(l => l.code && l.qty > 0);
   bomRows = [];
-  if (!lines.length) { $('#bomBody').innerHTML = '<div class="muted small" style="padding:14px;text-align:center">품목과 수량을 입력하면 여기에 ERP 등록용 부품 목록이 나옵니다.</div>'; $('#bomCopy').disabled = true; return; }
+  if (!lines.length) { $('#bomBody').innerHTML = '<div class="muted small" style="padding:14px;text-align:center">품목과 수량을 입력하면 여기에 ERP 등록용 부품 목록이 나옵니다.</div>'; $('#bomCopy').disabled = true; $$('.ccol').forEach(b => b.disabled = true); return; }
   let html = '', grand = 0;
   for (const l of lines) {
     const it = S.itemMap[l.code] || {}, b = bomFor(l.code, date), lineAmt = Math.round(l.qty * l.price);
@@ -201,13 +201,14 @@ function renderBom() {
     html += `<div class="bomgrp"><div class="bomhd"><b>${esc(it.name || l.code)}</b> × ${fmt(l.qty)}${esc(it.unit || '')} <span class="muted">${b ? `BOM ${b.parts.length}품목 · 적용 ${esc(b.valid_from)}` : 'BOM 없음 — 품목 자체를 1줄로 등록'}</span>
       <span class="sp"></span>${ok ? '<span class="tag t-ok">합계 일치</span>' : `<span class="tag t-bad">BOM 합계 ${fmt(sum)} ≠ 입고 금액 ${fmt(lineAmt)}</span>`}
       <button class="bcopy" data-i="${bomRows.length - parts.length}" data-n="${parts.length}">이 모델만 복사</button></div>
-      <table class="bomt"><thead><tr><th class="num" style="width:40px">No</th><th style="width:150px">품번</th><th>품명</th><th class="num" style="width:70px">대당</th><th class="num" style="width:90px">수량</th><th class="num" style="width:110px">단가</th><th class="num" style="width:130px">금액</th></tr></thead><tbody>
+      <table class="bomt" data-i="${bomRows.length - parts.length}" data-n="${parts.length}"><thead><tr><th class="num" style="width:40px">No</th><th class="cc" data-col="part" title="이 모델 품번 열 복사">품번</th><th>품명</th><th class="num" style="width:52px">대당</th><th class="num cc" data-col="qty" style="width:70px" title="이 모델 수량 열 복사">수량</th><th class="num cc" data-col="price" style="width:90px" title="이 모델 단가 열 복사">단가</th><th class="num" style="width:105px">금액</th></tr></thead><tbody>
       ${parts.map((p, i) => `<tr><td class="num muted">${i + 1}</td><td class="nw">${esc(p.part)}</td><td class="small">${esc(p.name)}</td><td class="num">${fmt(p.per)}</td><td class="num"><b>${fmt(p.qty)}</b></td><td class="num">${fmt(p.price)}</td><td class="num">${fmt(p.amt)}</td></tr>`).join('')}
       </tbody><tfoot><tr><td colspan="6" class="num"><b>소계</b></td><td class="num"><b>${fmt(sum)}</b></td></tr></tfoot></table>
       ${!ok && l.ovr ? '<div class="small err">단가를 직접 수정한 줄이라 BOM 단가와 다릅니다. ERP 등록 단가를 확인하세요.</div>' : (!ok && b ? '<div class="small err">단가표와 BOM 단가가 맞지 않습니다 — 기준정보에서 새 단가의 BOM을 등록해 주세요.</div>' : '')}</div>`;
   }
   html += `<div class="bomtot">ERP 등록 합계 <b>${fmt(grand)}</b>원 · ${bomRows.length}줄</div>`;
-  $('#bomBody').innerHTML = html; $('#bomCopy').disabled = false;
+  $('#bomBody').innerHTML = html; $('#bomCopy').disabled = false; $$('.ccol').forEach(b => b.disabled = false);
+  $('#bomBody').querySelectorAll('th.cc').forEach(th => th.onclick = () => { const t = th.closest('table'); copyCol(bomRows.slice(+t.dataset.i, +t.dataset.i + +t.dataset.n), th.dataset.col); });
   $('#bomBody').querySelectorAll('.bcopy').forEach(b => b.onclick = () => copyRows(bomRows.slice(+b.dataset.i, +b.dataset.i + +b.dataset.n)));
 }
 async function copyRows(rows) {
@@ -218,6 +219,14 @@ async function copyRows(rows) {
   toast(`${rows.length}줄 복사했습니다 — ERP 입력 화면에 붙여넣으세요`);
 }
 $('#bomCopy').onclick = () => copyRows(bomRows);
+const COLNAME = { part: '품번', qty: '수량', price: '단가' };
+async function copyCol(rows, col) {
+  const txt = rows.map(p => p[col]).join('\n');
+  try { await navigator.clipboard.writeText(txt); }
+  catch (e) { const ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
+  toast(`${COLNAME[col]} ${rows.length}줄 복사했습니다`);
+}
+$$('.ccol').forEach(b => b.onclick = () => copyCol(bomRows, b.dataset.col));
 $('#rAddLine').onclick = () => addLine().querySelector('.lc').focus();
 $('#rDate').onchange = () => { $$('#rLines tbody tr').forEach(autoPrice); calc(); checkPO(); loadRecent(); };
 let poTimer;
