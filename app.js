@@ -220,29 +220,39 @@ async function copyRows(rows) {
 }
 $('#bomCopy').onclick = () => copyRows(bomRows);
 const COLNAME = { part: '품번', qty: '수량', price: '단가', name: '품명', per: '대당', amt: '금액' };
-/* 열 단위 드래그 선택 → 놓으면 복사 */
+/* 엑셀식 셀 범위 드래그 선택(행·열·사각형) → 놓으면 복사 */
+const SELCOLS = ['part', 'name', 'per', 'qty', 'price', 'amt'];
 let csel = null;
+const selRange = () => ({ rl: Math.min(csel.r0, csel.r1), rh: Math.max(csel.r0, csel.r1), cl: Math.min(csel.c0, csel.c1), ch: Math.max(csel.c0, csel.c1) });
 function paintSel() {
   $$('#bomBody td.csel').forEach(td => td.classList.remove('csel'));
   if (!csel) return;
-  const lo = Math.min(csel.r0, csel.r1), hi = Math.max(csel.r0, csel.r1);
-  $$(`#bomBody td[data-c="${csel.c}"]`).forEach(td => { const r = +td.dataset.r; if (r >= lo && r <= hi) td.classList.add('csel'); });
+  const { rl, rh, cl, ch } = selRange();
+  $$('#bomBody td[data-c]').forEach(td => { const r = +td.dataset.r, c = SELCOLS.indexOf(td.dataset.c); if (r >= rl && r <= rh && c >= cl && c <= ch) td.classList.add('csel'); });
 }
-function selRows() { if (!csel) return []; const lo = Math.min(csel.r0, csel.r1), hi = Math.max(csel.r0, csel.r1); return bomRows.slice(lo, hi + 1); }
+async function copySel() {
+  if (!csel) return;
+  const { rl, rh, cl, ch } = selRange(), cols = SELCOLS.slice(cl, ch + 1), rows = bomRows.slice(rl, rh + 1);
+  const txt = rows.map(p => cols.map(c => p[c] ?? '').join('\t')).join('\n');
+  try { await navigator.clipboard.writeText(txt); }
+  catch (e) { const ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
+  toast(rows.length === 1 && cols.length === 1 ? `${COLNAME[cols[0]]} 1칸 복사` : `${rows.length}행 × ${cols.length}열 복사 (${cols.map(c => COLNAME[c]).join('·')})`);
+}
 $('#bomBody').addEventListener('mousedown', e => {
   const td = e.target.closest('td[data-c]'); if (!td || e.button !== 0) return;
   e.preventDefault();
-  if (e.shiftKey && csel && csel.c === td.dataset.c) csel.r1 = +td.dataset.r;
-  else csel = { c: td.dataset.c, r0: +td.dataset.r, r1: +td.dataset.r };
+  const r = +td.dataset.r, c = SELCOLS.indexOf(td.dataset.c);
+  if (e.shiftKey && csel) { csel.r1 = r; csel.c1 = c; }
+  else csel = { r0: r, r1: r, c0: c, c1: c };
   csel.drag = true; paintSel();
 });
 $('#bomBody').addEventListener('mouseover', e => {
   if (!csel || !csel.drag) return;
-  const td = e.target.closest('td[data-c]'); if (!td || td.dataset.c !== csel.c) return;
-  csel.r1 = +td.dataset.r; paintSel();
+  const td = e.target.closest('td[data-c]'); if (!td) return;
+  csel.r1 = +td.dataset.r; csel.c1 = SELCOLS.indexOf(td.dataset.c); paintSel();
 });
-document.addEventListener('mouseup', () => { if (csel && csel.drag) { csel.drag = false; copyCol(selRows(), csel.c); } });
-document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && csel && !csel.drag && !window.getSelection().toString()) { e.preventDefault(); copyCol(selRows(), csel.c); } });
+document.addEventListener('mouseup', () => { if (csel && csel.drag) { csel.drag = false; copySel(); } });
+document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && csel && !csel.drag && !window.getSelection().toString()) { e.preventDefault(); copySel(); } });
 document.addEventListener('mousedown', e => { if (csel && !e.target.closest('#bomBody')) { csel = null; paintSel(); } });
 async function copyCol(rows, col) {
   const txt = rows.map(p => p[col]).join('\n');
