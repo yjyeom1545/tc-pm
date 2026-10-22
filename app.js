@@ -86,7 +86,7 @@ async function loadRefs() {
   const act = S.vendors.filter(v => v.active);
   if (!S.vendor) { let saved = null; try { saved = localStorage.getItem(LSV); } catch (e) {} S.vendor = (act.find(v => v.name === saved) || act[0] || { name: '대림에스앤티' }).name; }
   const vopts = act.map(v => `<option ${v.name === S.vendor ? 'selected' : ''}>${esc(v.name)}</option>`).join('');
-  $('#vendorSel').innerHTML = vopts; $('#rVendor').innerHTML = vopts; $('#cVendor').innerHTML = vopts;
+  $('#vendorSel').innerHTML = vopts; $('#rVendor').innerHTML = vopts; $('#cVendor').innerHTML = vopts; $('#mVendor').innerHTML = vopts;
   $('#lVendor').innerHTML = '<option value="__ALL__">전체 업체</option>' + vopts;
   S.items = it.data || []; S.itemMap = Object.fromEntries(S.items.map(i => [i.code, i]));
   S.prices = pr.data || [];
@@ -111,7 +111,7 @@ const SUB = {
 $('#nav').onclick = e => { const v = e.target.dataset.v; if (v) go(v); };
 function setVendor(v) {
   if (v === S.vendor) return; S.vendor = v; try { localStorage.setItem(LSV, v); } catch (e) {}
-  $('#vendorSel').value = v; $('#rVendor').value = v; $('#cVendor').value = v; if (!S.listAll) $('#lVendor').value = v; S.closeRes = null; selItem = null;
+  $('#vendorSel').value = v; $('#rVendor').value = v; $('#cVendor').value = v; $('#mVendor').value = v; if (!S.listAll) $('#lVendor').value = v; S.closeRes = null; selItem = null;
   const keep = S.editId ? null : { po: $('#rPO').value, note: $('#rNote').value };
   resetForm(); if (keep) { $('#rPO').value = keep.po; $('#rNote').value = keep.note; checkPO(); }
   initItemFilters(); renderEmpty();
@@ -120,6 +120,7 @@ function setVendor(v) {
 $('#vendorSel').onchange = () => { setVendor($('#vendorSel').value); go(S.view); };
 $('#rVendor').onchange = () => { setVendor($('#rVendor').value); loadRecent(); };
 $('#cVendor').onchange = () => { setVendor($('#cVendor').value); loadCloseInfo(); };
+$('#mVendor').onchange = () => { setVendor($('#mVendor').value); renderMaster(); };
 $('#lVendor').onchange = () => { const v = $('#lVendor').value; S.listAll = v === '__ALL__'; if (!S.listAll) setVendor(v); $('#lItem').value = ''; loadList(); };
 function go(v) {
   if (!SUB[v] || (v === 'users' && S.prof.role !== 'admin')) v = 'reg';

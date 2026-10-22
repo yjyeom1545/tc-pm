@@ -45,7 +45,7 @@
     </nav>
     <div class="me"><span id="meName"></span><span id="meRole" class="tag t-mut"></span><button id="btnOut">로그아웃</button></div>
   </header>
-  <div class="subnav"><span id="subnav"></span><label class="vsel">업체<select id="vendorSel"></select></label></div>
+  <div class="subnav"><span id="subnav"></span><label class="vsel hide">업체<select id="vendorSel"></select></label></div>
 
   <main>
     <!-- 입고 등록 -->
@@ -167,7 +167,7 @@
     <section id="v-master" class="hide">
       <div class="grid2 g64">
         <div class="card">
-          <h2>품목 · 현재 단가 <span class="muted small" style="font-weight:400" id="mAdmHint"></span></h2>
+          <div class="bar" style="align-items:center;margin-bottom:8px"><h2 style="margin:0">품목 · 현재 단가</h2><label class="vsel">업체<select id="mVendor" style="min-width:150px;font-weight:700"></select></label><span class="muted small" id="mAdmHint"></span></div>
           <div class="tw" style="max-height:62vh"><table id="tItems"></table></div>
           <div class="btns adm"><button id="mAddItem">+ 품목 추가</button></div>
         </div>
