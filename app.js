@@ -626,7 +626,8 @@ $('#mAddItem').onclick = async () => {
   const name = (prompt('품목명') || '').trim(); if (!name) return;
   const category = (prompt('구분: 모델 / 단품 / CWT', '모델') || '모델').trim();
   const unit = (prompt('단위: 대 / ea / kg', category === '모델' ? '대' : category === 'CWT' ? 'kg' : 'ea') || '대').trim();
-  const { error } = await sb.from('pm_items').insert({ code, name, category, unit, vendor: S.vendor, erp_part: erp_part || null, sort: 900 });
+  const nextSort = vItems().reduce((m, i) => Math.max(m, Number(i.sort) || 0), 0) + 1;
+  const { error } = await sb.from('pm_items').insert({ code, name, category, unit, vendor: S.vendor, erp_part: erp_part || null, sort: nextSort });
   if (error) return toast(krErr(error.message), 1);
   toast('품목 추가 — 단가를 등록하세요'); selItem = code; await loadRefs(); renderMaster(); initItemFilters();
 };
