@@ -130,3 +130,5 @@ table.bomt th.cc:hover{background:#dfe6f2}
 .bomgrp .bomhd{flex-wrap:wrap}
 @media (max-width:1300px){.grid3{grid-template-columns:1fr}.col-scroll{height:auto}.col-scroll .scrollbody{max-height:70vh}}
 table.lines input.num{padding:5px 4px}
+#bomBody table.bomt td[data-c]{cursor:cell;user-select:none}
+#bomBody table.bomt td.csel{background:#cfe0fb !important;outline:1px solid #7aa3e5;outline-offset:-1px}

@@ -197,12 +197,12 @@ function renderBom() {
     parts.forEach(p => p.amt = Math.round(p.qty * p.price));
     const sum = parts.reduce((a, p) => a + p.amt, 0); grand += sum;
     const ok = sum === lineAmt;
-    bomRows.push(...parts);
+    const base = bomRows.length; bomRows.push(...parts);
     html += `<div class="bomgrp"><div class="bomhd"><b>${esc(it.name || l.code)}</b> × ${fmt(l.qty)}${esc(it.unit || '')} <span class="muted">${b ? `BOM ${b.parts.length}품목 · 적용 ${esc(b.valid_from)}` : 'BOM 없음 — 품목 자체를 1줄로 등록'}</span>
       <span class="sp"></span>${ok ? '<span class="tag t-ok">합계 일치</span>' : `<span class="tag t-bad">BOM 합계 ${fmt(sum)} ≠ 입고 금액 ${fmt(lineAmt)}</span>`}
       <button class="bcopy" data-i="${bomRows.length - parts.length}" data-n="${parts.length}">이 모델만 복사</button></div>
       <table class="bomt" data-i="${bomRows.length - parts.length}" data-n="${parts.length}"><thead><tr><th class="num" style="width:40px">No</th><th class="cc" data-col="part" title="이 모델 품번 열 복사">품번</th><th>품명</th><th class="num" style="width:52px">대당</th><th class="num cc" data-col="qty" style="width:70px" title="이 모델 수량 열 복사">수량</th><th class="num cc" data-col="price" style="width:90px" title="이 모델 단가 열 복사">단가</th><th class="num" style="width:105px">금액</th></tr></thead><tbody>
-      ${parts.map((p, i) => `<tr><td class="num muted">${i + 1}</td><td class="nw">${esc(p.part)}</td><td class="small">${esc(p.name)}</td><td class="num">${fmt(p.per)}</td><td class="num"><b>${fmt(p.qty)}</b></td><td class="num">${fmt(p.price)}</td><td class="num">${fmt(p.amt)}</td></tr>`).join('')}
+      ${parts.map((p, i) => { const r = base + i; return `<tr><td class="num muted">${i + 1}</td><td class="nw" data-r="${r}" data-c="part">${esc(p.part)}</td><td class="small" data-r="${r}" data-c="name">${esc(p.name)}</td><td class="num" data-r="${r}" data-c="per">${fmt(p.per)}</td><td class="num" data-r="${r}" data-c="qty"><b>${fmt(p.qty)}</b></td><td class="num" data-r="${r}" data-c="price">${fmt(p.price)}</td><td class="num" data-r="${r}" data-c="amt">${fmt(p.amt)}</td></tr>`; }).join('')}
       </tbody><tfoot><tr><td colspan="6" class="num"><b>소계</b></td><td class="num"><b>${fmt(sum)}</b></td></tr></tfoot></table>
       ${!ok && l.ovr ? '<div class="small err">단가를 직접 수정한 줄이라 BOM 단가와 다릅니다. ERP 등록 단가를 확인하세요.</div>' : (!ok && b ? '<div class="small err">단가표와 BOM 단가가 맞지 않습니다 — 기준정보에서 새 단가의 BOM을 등록해 주세요.</div>' : '')}</div>`;
   }
@@ -219,7 +219,31 @@ async function copyRows(rows) {
   toast(`${rows.length}줄 복사했습니다 — ERP 입력 화면에 붙여넣으세요`);
 }
 $('#bomCopy').onclick = () => copyRows(bomRows);
-const COLNAME = { part: '품번', qty: '수량', price: '단가' };
+const COLNAME = { part: '품번', qty: '수량', price: '단가', name: '품명', per: '대당', amt: '금액' };
+/* 열 단위 드래그 선택 → 놓으면 복사 */
+let csel = null;
+function paintSel() {
+  $$('#bomBody td.csel').forEach(td => td.classList.remove('csel'));
+  if (!csel) return;
+  const lo = Math.min(csel.r0, csel.r1), hi = Math.max(csel.r0, csel.r1);
+  $$(`#bomBody td[data-c="${csel.c}"]`).forEach(td => { const r = +td.dataset.r; if (r >= lo && r <= hi) td.classList.add('csel'); });
+}
+function selRows() { if (!csel) return []; const lo = Math.min(csel.r0, csel.r1), hi = Math.max(csel.r0, csel.r1); return bomRows.slice(lo, hi + 1); }
+$('#bomBody').addEventListener('mousedown', e => {
+  const td = e.target.closest('td[data-c]'); if (!td || e.button !== 0) return;
+  e.preventDefault();
+  if (e.shiftKey && csel && csel.c === td.dataset.c) csel.r1 = +td.dataset.r;
+  else csel = { c: td.dataset.c, r0: +td.dataset.r, r1: +td.dataset.r };
+  csel.drag = true; paintSel();
+});
+$('#bomBody').addEventListener('mouseover', e => {
+  if (!csel || !csel.drag) return;
+  const td = e.target.closest('td[data-c]'); if (!td || td.dataset.c !== csel.c) return;
+  csel.r1 = +td.dataset.r; paintSel();
+});
+document.addEventListener('mouseup', () => { if (csel && csel.drag) { csel.drag = false; copyCol(selRows(), csel.c); } });
+document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && csel && !csel.drag && !window.getSelection().toString()) { e.preventDefault(); copyCol(selRows(), csel.c); } });
+document.addEventListener('mousedown', e => { if (csel && !e.target.closest('#bomBody')) { csel = null; paintSel(); } });
 async function copyCol(rows, col) {
   const txt = rows.map(p => p[col]).join('\n');
   try { await navigator.clipboard.writeText(txt); }
