@@ -147,12 +147,13 @@ function itemOptions(sel) {
 }
 function addLine(l = {}) {
   const tr = document.createElement('tr');
-  tr.innerHTML = `<td><select class="lc">${itemOptions(l.code)}</select></td><td><input class="lq num" type="number" min="0" step="any" value="${l.qty ?? ''}"></td><td class="lu c muted"></td><td><input class="lp num" type="number" step="any" value="${l.unit_price ?? ''}"></td><td class="la num"></td><td class="x" title="삭제">✕</td>`;
+  tr.innerHTML = `<td><select class="lc">${itemOptions(l.code)}</select><div class="cwt hide"><span>총중량</span><input class="lg num" type="number" min="0" step="any" placeholder="계근" value="${l.gross ?? ''}"><span>kg · 파렛</span><input class="lpl num" type="number" min="0" step="1" placeholder="0" value="${l.pallets ?? ''}"><span>개</span><span class="cwtk muted"></span></div></td><td><input class="lq num" type="number" min="0" step="any" value="${l.qty ?? ''}"></td><td class="lu c muted"></td><td><input class="lp num" type="number" step="any" value="${l.unit_price ?? ''}"></td><td class="la num"></td><td class="x" title="삭제">✕</td>`;
   $('#rLines tbody').appendChild(tr);
   tr.dataset.ovr = l.overridden ? '1' : '';
   const sel = tr.querySelector('.lc'), q = tr.querySelector('.lq'), p = tr.querySelector('.lp');
   sel.onchange = () => { tr.dataset.ovr = ''; autoPrice(tr); calc(); q.focus(); };
   q.oninput = calc;
+  tr.querySelector('.lg').oninput = calc; tr.querySelector('.lpl').oninput = calc;
   p.oninput = () => { tr.dataset.ovr = Number(p.value) !== priceFor(sel.value, $('#rDate').value) ? '1' : ''; calc(); };
   tr.querySelector('.x').onclick = () => { if ($('#rLines tbody').children.length === 1) { tr.querySelector('.lc').value = ''; tr.querySelector('.lq').value = ''; tr.querySelector('.lp').value = ''; tr.dataset.ovr = ''; } else tr.remove(); calc(); };
   if (!l.unit_price) autoPrice(tr);
@@ -165,10 +166,26 @@ function autoPrice(tr) {
   const p = priceFor(code, $('#rDate').value);
   tr.querySelector('.lp').value = p ?? '';
 }
+const palletKg = () => Number((S.master && S.master.settings || {}).palletKg) || 70;   // 파렛 1개 공제 중량(kg)
+const isCWT = it => !!it && it.category === 'CWT';
+function cwtCalc(tr, it) {
+  const box = tr.querySelector('.cwt'), q = tr.querySelector('.lq'), g = tr.querySelector('.lg'), pl = tr.querySelector('.lpl');
+  const on = isCWT(it); box.classList.toggle('hide', !on);
+  if (!on || g.value === '') { q.readOnly = false; q.title = ''; tr.querySelector('.cwtk').textContent = on ? `(파렛 1개 ${palletKg()}kg 공제)` : ''; return; }
+  const gross = Number(g.value) || 0, n = Math.max(0, Math.round(Number(pl.value) || 0)), net = Math.max(0, gross - n * palletKg());
+  q.value = Math.round(net * 1000) / 1000; q.readOnly = true; q.title = '총중량 − 파렛수 × ' + palletKg() + 'kg (자동 계산)';
+  tr.querySelector('.cwtk').textContent = n ? `− ${fmt(n * palletKg())}kg = 순중량 ${fmt(net)}kg` : `= 순중량 ${fmt(net)}kg`;
+}
+function cwtNote(tr) {   // 저장 시 비고에 남길 계근 기록
+  const it = S.itemMap[tr.querySelector('.lc').value], g = tr.querySelector('.lg').value;
+  return isCWT(it) && g !== '' ? `[CWT 총중량 ${Number(g)}kg · 파렛 ${Math.round(Number(tr.querySelector('.lpl').value) || 0)}개]` : '';
+}
+const CWT_TAG = /\s*\[CWT 총중량 ([\d.]+)kg · 파렛 (\d+)개\]/g;
 function calc() {
   let tot = 0;
   $$('#rLines tbody tr').forEach(tr => {
     const code = tr.querySelector('.lc').value, it = S.itemMap[code];
+    cwtCalc(tr, it);
     const q = Number(tr.querySelector('.lq').value) || 0, p = Number(tr.querySelector('.lp').value) || 0;
     tr.querySelector('.lu').textContent = it ? it.unit : '';
     tr.querySelector('.lp').classList.toggle('ovr', tr.dataset.ovr === '1');
@@ -294,7 +311,8 @@ $('#rSave').onclick = async () => {
   const dup = lines.map(l => l.code).filter((c, i, a) => a.indexOf(c) !== i);
   if (dup.length) return toast('같은 품목이 두 줄 있습니다 — 수량을 합쳐 주세요', 1);
   $('#rSave').disabled = true;
-  const head = { po: $('#rPO').value, recv_date: $('#rDate').value, vendor: S.vendor, note: $('#rNote').value.trim() || null };
+  const tags = $$('#rLines tbody tr').map(cwtNote).filter(Boolean).join(' ');
+  const head = { po: $('#rPO').value, recv_date: $('#rDate').value, vendor: S.vendor, note: [$('#rNote').value.replace(CWT_TAG, '').trim(), tags].filter(Boolean).join(' ') || null };
   let error = null;
   if (!S.editId) {
     ({ error } = await sb.rpc('pm_new_receipt', { p: { ...head, lines } }));
@@ -335,8 +353,9 @@ function editReceipt(r) {
   if (r.vendor && r.vendor !== S.vendor) setVendor(r.vendor);
   go('reg');
   S.editId = r.id; $('#regTitle').textContent = '입고 수정 — ' + r.vendor + ' · ' + r.po; $('#rSave').textContent = '수정 저장'; $('#rReset').textContent = '수정 취소';
-  $('#rDate').value = r.recv_date; $('#rPO').value = r.po; $('#rNote').value = r.note || '';
-  $('#rLines tbody').innerHTML = ''; r.lines.forEach(l => addLine({ code: l.code, qty: Number(l.qty), unit_price: Number(l.unit_price), overridden: l.price_overridden }));
+  const cw = [...(r.note || '').matchAll(CWT_TAG)][0];
+  $('#rDate').value = r.recv_date; $('#rPO').value = r.po; $('#rNote').value = (r.note || '').replace(CWT_TAG, '').trim();
+  $('#rLines tbody').innerHTML = ''; r.lines.forEach(l => addLine({ code: l.code, qty: Number(l.qty), unit_price: Number(l.unit_price), overridden: l.price_overridden, ...(cw && isCWT(S.itemMap[l.code]) ? { gross: Number(cw[1]), pallets: Number(cw[2]) } : {}) }));
   checkPO(); loadRecent();
 }
 

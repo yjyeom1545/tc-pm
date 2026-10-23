@@ -73,6 +73,10 @@ table.lines select,table.lines input{width:100%;padding:5px 6px}
 table.lines input.num{text-align:right}
 table.lines input.ovr{background:var(--warnbg);border-color:#e0b84a}
 table.lines .x,.x{color:var(--bad);cursor:pointer;text-align:center}
+table.lines .cwt{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-top:4px;font-size:12px}
+table.lines .cwt input{width:78px;padding:3px 5px}
+table.lines .cwt .cwtk{flex-basis:100%}
+table.lines input[readonly]{background:#f3f4f6;color:#334}
 #poMsg{min-height:18px;margin-bottom:6px}
 .ok{color:var(--ok)}.err{color:var(--bad)}
 /* kpi */
