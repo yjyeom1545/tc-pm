@@ -73,9 +73,13 @@ table.lines select,table.lines input{width:100%;padding:5px 6px}
 table.lines input.num{text-align:right}
 table.lines input.ovr{background:var(--warnbg);border-color:#e0b84a}
 table.lines .x,.x{color:var(--bad);cursor:pointer;text-align:center}
-table.lines .cwt{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-top:4px;font-size:12px}
-table.lines .cwt input{width:78px;padding:3px 5px}
-table.lines .cwt .cwtk{flex-basis:100%}
+table.lines tr.cwtrow td{background:#f5f8fc;border-top:0;padding:6px 10px}
+table.lines .cwt{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;font-size:13px}
+table.lines .cwt label{display:flex;flex-direction:row;align-items:center;gap:6px;margin:0;font-weight:400;font-size:13px;color:inherit;white-space:nowrap}
+table.lines .cwt label .muted{font-size:12px}
+table.lines .cwt input{width:96px;padding:4px 6px}
+table.lines .cwt .lpl{width:56px}
+table.lines .cwt .cwtk{font-weight:700;color:var(--pri,#1f3864)}
 table.lines input[readonly]{background:#f3f4f6;color:#334}
 #poMsg{min-height:18px;margin-bottom:6px}
 .ok{color:var(--ok)}.err{color:var(--bad)}
@@ -136,3 +140,4 @@ table.bomt th.cc:hover{background:#dfe6f2}
 table.lines input.num{padding:5px 4px}
 #bomBody table.bomt td[data-c]{cursor:cell;user-select:none}
 #bomBody table.bomt td.csel{background:#cfe0fb !important;outline:1px solid #7aa3e5;outline-offset:-1px}
+table.lines tr.line td:nth-child(2) input{min-width:70px}

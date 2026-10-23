@@ -147,15 +147,19 @@ function itemOptions(sel) {
 }
 function addLine(l = {}) {
   const tr = document.createElement('tr');
-  tr.innerHTML = `<td><select class="lc">${itemOptions(l.code)}</select><div class="cwt hide"><span>총중량</span><input class="lg num" type="number" min="0" step="any" placeholder="계근" value="${l.gross ?? ''}"><span>kg · 파렛</span><input class="lpl num" type="number" min="0" step="1" placeholder="0" value="${l.pallets ?? ''}"><span>개</span><span class="cwtk muted"></span></div></td><td><input class="lq num" type="number" min="0" step="any" value="${l.qty ?? ''}"></td><td class="lu c muted"></td><td><input class="lp num" type="number" step="any" value="${l.unit_price ?? ''}"></td><td class="la num"></td><td class="x" title="삭제">✕</td>`;
-  $('#rLines tbody').appendChild(tr);
+  tr.innerHTML = `<td><select class="lc">${itemOptions(l.code)}</select></td><td><input class="lq num" type="number" min="0" step="any" value="${l.qty ?? ''}"></td><td class="lu c muted"></td><td><input class="lp num" type="number" step="any" value="${l.unit_price ?? ''}"></td><td class="la num"></td><td class="x" title="삭제">✕</td>`;
+  tr.className = 'line';
+  const sub = document.createElement('tr'); sub.className = 'cwtrow hide';
+  sub.innerHTML = `<td colspan="6"><div class="cwt"><b>CWT 계근</b><label>총중량 <input class="lg num" type="number" min="0" step="any" placeholder="계근 중량" value="${l.gross ?? ''}"> kg</label><label>파렛 <input class="lpl num" type="number" min="0" step="1" value="${l.pallets ?? 1}"> 개 <span class="muted">(1개당 ${palletKg()}kg 공제)</span></label><span class="cwtk"></span></div></td>`;
+  tr._sub = sub;
+  $('#rLines tbody').appendChild(tr); $('#rLines tbody').appendChild(sub);
   tr.dataset.ovr = l.overridden ? '1' : '';
   const sel = tr.querySelector('.lc'), q = tr.querySelector('.lq'), p = tr.querySelector('.lp');
-  sel.onchange = () => { tr.dataset.ovr = ''; autoPrice(tr); calc(); q.focus(); };
+  sel.onchange = () => { tr.dataset.ovr = ''; autoPrice(tr); calc(); (isCWT(S.itemMap[sel.value]) ? sub.querySelector('.lg') : q).focus(); };
   q.oninput = calc;
-  tr.querySelector('.lg').oninput = calc; tr.querySelector('.lpl').oninput = calc;
+  sub.querySelector('.lg').oninput = calc; sub.querySelector('.lpl').oninput = calc;
   p.oninput = () => { tr.dataset.ovr = Number(p.value) !== priceFor(sel.value, $('#rDate').value) ? '1' : ''; calc(); };
-  tr.querySelector('.x').onclick = () => { if ($('#rLines tbody').children.length === 1) { tr.querySelector('.lc').value = ''; tr.querySelector('.lq').value = ''; tr.querySelector('.lp').value = ''; tr.dataset.ovr = ''; } else tr.remove(); calc(); };
+  tr.querySelector('.x').onclick = () => { if ($$('#rLines tbody tr.line').length === 1) { tr.querySelector('.lc').value = ''; tr.querySelector('.lq').value = ''; tr.querySelector('.lp').value = ''; tr.dataset.ovr = ''; } else { tr._sub.remove(); tr.remove(); } calc(); };
   if (!l.unit_price) autoPrice(tr);
   calc();
   return tr;
@@ -169,21 +173,21 @@ function autoPrice(tr) {
 const palletKg = () => Number((S.master && S.master.settings || {}).palletKg) || 70;   // 파렛 1개 공제 중량(kg)
 const isCWT = it => !!it && it.category === 'CWT';
 function cwtCalc(tr, it) {
-  const box = tr.querySelector('.cwt'), q = tr.querySelector('.lq'), g = tr.querySelector('.lg'), pl = tr.querySelector('.lpl');
-  const on = isCWT(it); box.classList.toggle('hide', !on);
-  if (!on || g.value === '') { q.readOnly = false; q.title = ''; tr.querySelector('.cwtk').textContent = on ? `(파렛 1개 ${palletKg()}kg 공제)` : ''; return; }
+  const sub = tr._sub, q = tr.querySelector('.lq'), g = sub.querySelector('.lg'), pl = sub.querySelector('.lpl'), k = sub.querySelector('.cwtk');
+  const on = isCWT(it); sub.classList.toggle('hide', !on);
+  if (!on || g.value === '') { q.readOnly = false; q.title = ''; k.textContent = on ? '→ 총중량을 넣으면 수량(순중량)이 자동 계산됩니다' : ''; k.classList.add('muted'); return; }
   const gross = Number(g.value) || 0, n = Math.max(0, Math.round(Number(pl.value) || 0)), net = Math.max(0, gross - n * palletKg());
   q.value = Math.round(net * 1000) / 1000; q.readOnly = true; q.title = '총중량 − 파렛수 × ' + palletKg() + 'kg (자동 계산)';
-  tr.querySelector('.cwtk').textContent = n ? `− ${fmt(n * palletKg())}kg = 순중량 ${fmt(net)}kg` : `= 순중량 ${fmt(net)}kg`;
+  k.classList.remove('muted'); k.textContent = `→ 순중량 ${fmt(net)}kg` + (n ? `  (${fmt(gross)} − ${fmt(n * palletKg())})` : '');
 }
 function cwtNote(tr) {   // 저장 시 비고에 남길 계근 기록
-  const it = S.itemMap[tr.querySelector('.lc').value], g = tr.querySelector('.lg').value;
-  return isCWT(it) && g !== '' ? `[CWT 총중량 ${Number(g)}kg · 파렛 ${Math.round(Number(tr.querySelector('.lpl').value) || 0)}개]` : '';
+  const it = S.itemMap[tr.querySelector('.lc').value], g = tr._sub.querySelector('.lg').value;
+  return isCWT(it) && g !== '' ? `[CWT 총중량 ${Number(g)}kg · 파렛 ${Math.round(Number(tr._sub.querySelector('.lpl').value) || 0)}개]` : '';
 }
 const CWT_TAG = /\s*\[CWT 총중량 ([\d.]+)kg · 파렛 (\d+)개\]/g;
 function calc() {
   let tot = 0;
-  $$('#rLines tbody tr').forEach(tr => {
+  $$('#rLines tbody tr.line').forEach(tr => {
     const code = tr.querySelector('.lc').value, it = S.itemMap[code];
     cwtCalc(tr, it);
     const q = Number(tr.querySelector('.lq').value) || 0, p = Number(tr.querySelector('.lp').value) || 0;
@@ -203,7 +207,7 @@ function bomFor(code, date) {
 let bomRows = [];
 function renderBom() {
   const date = $('#rDate').value;
-  const lines = $$('#rLines tbody tr').map(tr => ({ code: tr.querySelector('.lc').value, qty: Number(tr.querySelector('.lq').value) || 0, price: Number(tr.querySelector('.lp').value) || 0, ovr: tr.dataset.ovr === '1' })).filter(l => l.code && l.qty > 0);
+  const lines = $$('#rLines tbody tr.line').map(tr => ({ code: tr.querySelector('.lc').value, qty: Number(tr.querySelector('.lq').value) || 0, price: Number(tr.querySelector('.lp').value) || 0, ovr: tr.dataset.ovr === '1' })).filter(l => l.code && l.qty > 0);
   bomRows = [];
   if (!lines.length) { $('#bomBody').innerHTML = '<div class="muted small" style="padding:14px;text-align:center">품목과 수량을 입력하면 여기에 ERP 등록용 부품 목록이 나옵니다.</div>'; $('#bomCopy').disabled = true; $$('.ccol').forEach(b => b.disabled = true); return; }
   let html = '', grand = 0;
@@ -280,7 +284,7 @@ async function copyCol(rows, col) {
 }
 $$('.ccol').forEach(b => b.onclick = () => copyCol(bomRows, b.dataset.col));
 $('#rAddLine').onclick = () => addLine().querySelector('.lc').focus();
-$('#rDate').onchange = () => { $$('#rLines tbody tr').forEach(autoPrice); calc(); checkPO(); loadRecent(); };
+$('#rDate').onchange = () => { $$('#rLines tbody tr.line').forEach(autoPrice); calc(); checkPO(); loadRecent(); };
 let poTimer;
 $('#rPO').oninput = () => { $('#rPO').value = $('#rPO').value.toUpperCase().replace(/\s/g, ''); clearTimeout(poTimer); poTimer = setTimeout(checkPO, 250); };
 async function checkPO() {
@@ -302,16 +306,16 @@ function resetForm() {
 }
 $('#rReset').onclick = () => { resetForm(); $('#rPO').focus(); };
 $('#rSave').onclick = async () => {
-  const lines = $$('#rLines tbody tr').map(tr => ({ code: tr.querySelector('.lc').value, qty: Number(tr.querySelector('.lq').value), unit_price: Number(tr.querySelector('.lp').value), overridden: tr.dataset.ovr === '1' })).filter(l => l.code || l.qty);
+  const lines = $$('#rLines tbody tr.line').map(tr => ({ code: tr.querySelector('.lc').value, qty: Number(tr.querySelector('.lq').value), unit_price: Number(tr.querySelector('.lp').value), overridden: tr.dataset.ovr === '1' })).filter(l => l.code || l.qty);
   if (!$('#rDate').value) return toast('입고일을 입력하세요', 1);
   if (!(await checkPO())) return toast('P/O No를 확인하세요', 1);
   if (!lines.length) return toast('품목을 1개 이상 입력하세요', 1);
   if (lines.some(l => !l.code || !(l.qty > 0))) return toast('품목과 수량을 확인하세요', 1);
-  if ($$('#rLines tbody tr').some(tr => tr.querySelector('.lc').value && tr.querySelector('.lp').value === '')) return toast('단가가 없는 품목이 있습니다 (기준정보에 단가 등록 필요)', 1);
+  if ($$('#rLines tbody tr.line').some(tr => tr.querySelector('.lc').value && tr.querySelector('.lp').value === '')) return toast('단가가 없는 품목이 있습니다 (기준정보에 단가 등록 필요)', 1);
   const dup = lines.map(l => l.code).filter((c, i, a) => a.indexOf(c) !== i);
   if (dup.length) return toast('같은 품목이 두 줄 있습니다 — 수량을 합쳐 주세요', 1);
   $('#rSave').disabled = true;
-  const tags = $$('#rLines tbody tr').map(cwtNote).filter(Boolean).join(' ');
+  const tags = $$('#rLines tbody tr.line').map(cwtNote).filter(Boolean).join(' ');
   const head = { po: $('#rPO').value, recv_date: $('#rDate').value, vendor: S.vendor, note: [$('#rNote').value.replace(CWT_TAG, '').trim(), tags].filter(Boolean).join(' ') || null };
   let error = null;
   if (!S.editId) {
