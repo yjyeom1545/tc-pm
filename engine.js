@@ -90,18 +90,18 @@ function parsePurchase(wb, XLSX) {
     if (hr < 0) continue;
     const H = g[hr].map(norm);
     const col = (...names) => { for (const n of names) { const i = H.indexOf(norm(n)); if (i >= 0) return i; } return -1; };
-    const c = { part: col('품목'), pname: col('품목명'), date: col('입고일'), qty: col('매입수량'), price: col('매입단가'), amt: col('금액', '매입순금액'), po: col('P/O No'), gr: col('입고번호'), vendor: col('거래처명'), vcode: col('거래처') };
+    const c = { part: col('품목'), pname: col('품목명'), spec: col('품목규격'), grp: col('품목그룹명', '품목그룹'), unit: col('단위', '구매단위'), date: col('입고일', '매입일'), qty: col('매입수량'), price: col('매입단가'), amt: col('금액', '매입순금액'), po: col('P/O No'), gr: col('입고번호'), vendor: col('거래처명', '공급업체명'), vcode: col('거래처', '공급업체') };
     const lines = [];
     for (let i = hr + 1; i < g.length; i++) {
       const r = g[i]; if (!r) continue;
       const po = r[c.po]; if (!isPO(po)) continue;
       lines.push({
-        po: po.trim(), part: String(r[c.part] ?? '').trim(), pname: r[c.pname], date: toDateStr(r[c.date], XLSX),
+        po: po.trim(), part: String(r[c.part] ?? '').trim(), pname: r[c.pname], spec: c.spec >= 0 ? r[c.spec] : '', grp: c.grp >= 0 ? r[c.grp] : '', unit: c.unit >= 0 ? String(r[c.unit] ?? '').trim() : '', date: toDateStr(r[c.date], XLSX),
         qty: Number(r[c.qty]) || 0, price: Number(r[c.price]) || 0, amt: r0(r[c.amt]), gr: c.gr >= 0 ? String(r[c.gr] ?? '').trim() : '',
         vendor: c.vendor >= 0 ? r[c.vendor] : '', vcode: c.vcode >= 0 ? String(r[c.vcode] ?? '').trim() : ''
       });
     }
-    return { sheet: sn, lines };
+    return { sheet: sn, lines, kind: 'purchase', hasVendor: c.vendor >= 0 || c.vcode >= 0 };
   }
   return null;
 }
