@@ -531,7 +531,7 @@ function renderEmpty() {
   const k = (l, d, c = '') => `<div class="kpi ${c}"><div class="l">${l}</div><div class="v muted">—</div><div class="d muted">${d}</div></div>`;
   $('#kpis').innerHTML = k('ERP 매입', 'P/O —건') + k('업체 명세서', 'ERP 대비 —') + k('웹등록', 'ERP 대비 —') + k('일치 P/O (P/O·금액)', '날짜 차이 —', 'ok') + k('확인필요 P/O', '미등록·모델 표기 등', 'warn') + k('불일치 P/O / 업체에만 있는 행', '', 'bad');
   $('#tPO').innerHTML = PO_HEAD + '<tbody><tr class="empty"><td colspan="13">ERP 매입내역등록(S)을 넣고 [대조 실행]을 누르면 P/O별 결과가 표시됩니다.</td></tr></tbody>';
-  $('#tModel').innerHTML = '<thead><tr><th>모델 / 품목군</th><th class="num">P/O</th><th class="num">대수 / 수량</th><th class="num">웹등록</th><th class="num">ERP</th><th class="num">웹등록−ERP</th><th class="num">업체</th><th class="num">업체−ERP</th></tr></thead><tbody><tr class="empty"><td colspan="8">대조 실행 후 표시됩니다.</td></tr></tbody>';
+  $('#tModel').innerHTML = '<thead><tr><th>모델 / 품목군</th><th class="num">P/O</th><th class="num">대수 / 수량</th><th class="num">웹등록</th><th class="num">ERP</th><th class="num">웹등록−ERP</th><th class="num">거래명세서</th><th class="num">거래명세서−ERP</th></tr></thead><tbody><tr class="empty"><td colspan="8">대조 실행 후 표시됩니다.</td></tr></tbody>';
   $('#t-ven').innerHTML = '<div class="muted small" style="padding:18px">업체 명세서를 넣고 대조하면 ① 업체에만 있는 행 ② 명세서 내부 점검 ③ 대조 제외 행이 표시됩니다.</div>';
   $('#t-stf').innerHTML = '<div class="muted small" style="padding:18px">대조 후 ① 등록됐지만 ERP에 없는 P/O ② ERP에는 있지만 등록 안 된 P/O가 표시됩니다.</div>';
   $('#poCount').textContent = ''; $('#btnXls').disabled = true; $('#btnClose').disabled = true;
@@ -565,7 +565,7 @@ function renderModel() {
   const dc = v => `<span class="${v ? 'diff' : ''}">${v > 0 ? '+' : ''}${fmt(v)}</span>`;
   const q = x => !x.qty ? '' : x.unit === '대' ? fmt(x.qty) + ' 대' : `${fmt(x.qty)} ${esc((x.unit || '').toLowerCase())}`;
   const hv = S.closeRes.summary.hasVendor;
-  $('#tModel').innerHTML = '<thead><tr><th>모델 / 품목군</th><th class="num">P/O</th><th class="num">대수 / 수량</th><th class="num">웹등록</th><th class="num">ERP</th><th class="num">웹등록−ERP</th><th class="num">업체</th><th class="num">업체−ERP</th></tr></thead><tbody>' +
+  $('#tModel').innerHTML = '<thead><tr><th>모델 / 품목군</th><th class="num">P/O</th><th class="num">대수 / 수량</th><th class="num">웹등록</th><th class="num">ERP</th><th class="num">웹등록−ERP</th><th class="num">거래명세서</th><th class="num">거래명세서−ERP</th></tr></thead><tbody>' +
     b.map(x => `<tr class="${(hv && x.vendor !== x.erp) || x.staff !== x.erp ? 'bad' : ''}"><td>${esc(x.model)}</td><td class="num">${x.pos}</td><td class="num">${q(x)}</td><td class="num">${fmt(x.staff)}</td><td class="num">${fmt(x.erp)}</td><td class="num">${dc(x.staff - x.erp)}</td><td class="num">${hv ? fmt(x.vendor) : ''}</td><td class="num">${hv ? dc(x.vendor - x.erp) : ''}</td></tr>`).join('') +
     `<tr style="font-weight:700"><td>합계</td><td class="num">${t.pos}</td><td class="num">${fmt(t.qty)} 대</td><td class="num">${fmt(t.staff)}</td><td class="num">${fmt(t.erp)}</td><td class="num">${dc(t.staff - t.erp)}</td><td class="num">${hv ? fmt(t.vendor) : ''}</td><td class="num">${hv ? dc(t.vendor - t.erp) : ''}</td></tr></tbody>`;
 }
