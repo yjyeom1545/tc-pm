@@ -58,7 +58,7 @@ function sheetGrid(ws, XLSX) {
 function parseERP(wb, XLSX) {
   for (const sn of wb.SheetNames) {
     const g = sheetGrid(wb.Sheets[sn], XLSX);
-    const hr = g.findIndex(r => r && r.some(c => norm(c) === 'P/ONO') && r.some(c => norm(c) === '입고번호'));
+    const hr = g.findIndex(r => r && r.some(c => norm(c) === 'P/ONO') && r.some(c => norm(c) === '입고번호') && !r.some(c => norm(c) === '매입수량'));
     if (hr < 0) continue;
     const H = g[hr].map(norm);
     const col = (...names) => { for (const n of names) { const i = H.indexOf(norm(n)); if (i >= 0) return i; } return -1; };
@@ -75,6 +75,30 @@ function parseERP(wb, XLSX) {
         po: po.trim(), part: String(r[c.part] ?? '').trim(), pname: r[c.pname], spec: r[c.spec], date: toDateStr(r[c.date], XLSX),
         qty: Number(r[c.qty]) || 0, amt: r0(r[c.amt]), grp: r[c.grp], unit: c.unit >= 0 ? String(r[c.unit] ?? '').trim() : '', vendor: r[c.vendor], vcode: c.vcode >= 0 ? String(r[c.vcode] ?? '').trim() : '', price: Number(r[c.price]) || 0,
         gr: r[c.gr]
+      });
+    }
+    return { sheet: sn, lines };
+  }
+  return null;
+}
+
+/* ---------- ERP 매입내역등록(S) ---------- */
+function parsePurchase(wb, XLSX) {
+  for (const sn of wb.SheetNames) {
+    const g = sheetGrid(wb.Sheets[sn], XLSX);
+    const hr = g.findIndex(r => r && r.some(c => norm(c) === 'P/ONO') && r.some(c => norm(c) === '매입수량'));
+    if (hr < 0) continue;
+    const H = g[hr].map(norm);
+    const col = (...names) => { for (const n of names) { const i = H.indexOf(norm(n)); if (i >= 0) return i; } return -1; };
+    const c = { part: col('품목'), pname: col('품목명'), date: col('입고일'), qty: col('매입수량'), price: col('매입단가'), amt: col('금액', '매입순금액'), po: col('P/O No'), gr: col('입고번호'), vendor: col('거래처명'), vcode: col('거래처') };
+    const lines = [];
+    for (let i = hr + 1; i < g.length; i++) {
+      const r = g[i]; if (!r) continue;
+      const po = r[c.po]; if (!isPO(po)) continue;
+      lines.push({
+        po: po.trim(), part: String(r[c.part] ?? '').trim(), pname: r[c.pname], date: toDateStr(r[c.date], XLSX),
+        qty: Number(r[c.qty]) || 0, price: Number(r[c.price]) || 0, amt: r0(r[c.amt]), gr: c.gr >= 0 ? String(r[c.gr] ?? '').trim() : '',
+        vendor: c.vendor >= 0 ? r[c.vendor] : '', vcode: c.vcode >= 0 ? String(r[c.vcode] ?? '').trim() : ''
       });
     }
     return { sheet: sn, lines };
@@ -340,7 +364,7 @@ function reconcile(input, master) {
       if (stAmt !== p.amt) { issues.push(`담당자 금액 차이 ${(r0(stAmt) - p.amt).toLocaleString()}`); status = 'bad'; }
       const sd = st.find(e => e.date && e.date !== p.date);
       if (sd) dateNotes.push(`담당 ${sd.date.slice(5)}`);
-      if (p.model) { const lab = norm(st[0].model); if (!p.model.sset.some(a => lab.includes(a))) { issues.push(`담당자 모델표기 "${st[0].model}" 확인`); if (status === 'ok') status = 'warn'; } }
+      if (p.model && st[0].model) { const lab = norm(st[0].model); if (!p.model.sset.some(a => lab.includes(a))) { issues.push(`담당자 모델표기 "${st[0].model}" 확인`); if (status === 'ok') status = 'warn'; } }
       if (st.length > 1) issues.push(`담당자 ${st.length}곳 기재`);
     }
     const vdiff = p.vendorMatches.filter(v => v.date && v.date !== p.date).map(v => v.date.slice(5));
@@ -379,6 +403,6 @@ function reconcile(input, master) {
   return { summary, rows, vOnly, vExcluded, vChecks, staffNoERP, staffOther, byModel: [...byModel.values()], skipped: input.staff.flatMap(s => s.skippedSheets.map(x => s.file + ' / ' + x)) };
 }
 
-const API = { DEFAULT_MASTER, parseERP, parseVendor, autoSelectVendorSheets, parseStaffWorkbook, reconcile, norm, splitList };
+const API = { DEFAULT_MASTER, parseERP, parsePurchase, parseVendor, autoSelectVendorSheets, parseStaffWorkbook, reconcile, norm, splitList };
 if (typeof module !== 'undefined') module.exports = API; else root.Recon = API;
 })(this);

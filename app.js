@@ -148,18 +148,13 @@ function itemOptions(sel) {
 function addLine(l = {}) {
   const tr = document.createElement('tr');
   tr.innerHTML = `<td><select class="lc">${itemOptions(l.code)}</select></td><td><input class="lq num" type="number" min="0" step="any" value="${l.qty ?? ''}"></td><td class="lu c muted"></td><td><input class="lp num" type="number" step="any" value="${l.unit_price ?? ''}"></td><td class="la num"></td><td class="x" title="삭제">✕</td>`;
-  tr.className = 'line';
-  const sub = document.createElement('tr'); sub.className = 'cwtrow hide';
-  sub.innerHTML = `<td colspan="6"><div class="cwt"><b>CWT 계근</b><label>총중량 <input class="lg num" type="number" min="0" step="any" placeholder="계근 중량" value="${l.gross ?? ''}"> kg</label><label>파렛 <input class="lpl num" type="number" min="0" step="1" value="${l.pallets ?? 1}"> 개 <span class="muted">(1개당 ${palletKg()}kg 공제)</span></label><span class="cwtk"></span></div></td>`;
-  tr._sub = sub;
-  $('#rLines tbody').appendChild(tr); $('#rLines tbody').appendChild(sub);
+  $('#rLines tbody').appendChild(tr);
   tr.dataset.ovr = l.overridden ? '1' : '';
   const sel = tr.querySelector('.lc'), q = tr.querySelector('.lq'), p = tr.querySelector('.lp');
-  sel.onchange = () => { tr.dataset.ovr = ''; autoPrice(tr); calc(); (isCWT(S.itemMap[sel.value]) ? sub.querySelector('.lg') : q).focus(); };
+  sel.onchange = () => { tr.dataset.ovr = ''; autoPrice(tr); calc(); q.focus(); };
   q.oninput = calc;
-  sub.querySelector('.lg').oninput = calc; sub.querySelector('.lpl').oninput = calc;
   p.oninput = () => { tr.dataset.ovr = Number(p.value) !== priceFor(sel.value, $('#rDate').value) ? '1' : ''; calc(); };
-  tr.querySelector('.x').onclick = () => { if ($$('#rLines tbody tr.line').length === 1) { tr.querySelector('.lc').value = ''; tr.querySelector('.lq').value = ''; tr.querySelector('.lp').value = ''; tr.dataset.ovr = ''; } else { tr._sub.remove(); tr.remove(); } calc(); };
+  tr.querySelector('.x').onclick = () => { if ($('#rLines tbody').children.length === 1) { tr.querySelector('.lc').value = ''; tr.querySelector('.lq').value = ''; tr.querySelector('.lp').value = ''; tr.dataset.ovr = ''; } else tr.remove(); calc(); };
   if (!l.unit_price) autoPrice(tr);
   calc();
   return tr;
@@ -170,26 +165,10 @@ function autoPrice(tr) {
   const p = priceFor(code, $('#rDate').value);
   tr.querySelector('.lp').value = p ?? '';
 }
-const palletKg = () => Number((S.master && S.master.settings || {}).palletKg) || 70;   // 파렛 1개 공제 중량(kg)
-const isCWT = it => !!it && it.category === 'CWT';
-function cwtCalc(tr, it) {
-  const sub = tr._sub, q = tr.querySelector('.lq'), g = sub.querySelector('.lg'), pl = sub.querySelector('.lpl'), k = sub.querySelector('.cwtk');
-  const on = isCWT(it); sub.classList.toggle('hide', !on);
-  if (!on || g.value === '') { q.readOnly = false; q.title = ''; k.textContent = on ? '→ 총중량을 넣으면 수량(순중량)이 자동 계산됩니다' : ''; k.classList.add('muted'); return; }
-  const gross = Number(g.value) || 0, n = Math.max(0, Math.round(Number(pl.value) || 0)), net = Math.max(0, gross - n * palletKg());
-  q.value = Math.round(net * 1000) / 1000; q.readOnly = true; q.title = '총중량 − 파렛수 × ' + palletKg() + 'kg (자동 계산)';
-  k.classList.remove('muted'); k.textContent = `→ 순중량 ${fmt(net)}kg` + (n ? `  (${fmt(gross)} − ${fmt(n * palletKg())})` : '');
-}
-function cwtNote(tr) {   // 저장 시 비고에 남길 계근 기록
-  const it = S.itemMap[tr.querySelector('.lc').value], g = tr._sub.querySelector('.lg').value;
-  return isCWT(it) && g !== '' ? `[CWT 총중량 ${Number(g)}kg · 파렛 ${Math.round(Number(tr._sub.querySelector('.lpl').value) || 0)}개]` : '';
-}
-const CWT_TAG = /\s*\[CWT 총중량 ([\d.]+)kg · 파렛 (\d+)개\]/g;
 function calc() {
   let tot = 0;
-  $$('#rLines tbody tr.line').forEach(tr => {
+  $$('#rLines tbody tr').forEach(tr => {
     const code = tr.querySelector('.lc').value, it = S.itemMap[code];
-    cwtCalc(tr, it);
     const q = Number(tr.querySelector('.lq').value) || 0, p = Number(tr.querySelector('.lp').value) || 0;
     tr.querySelector('.lu').textContent = it ? it.unit : '';
     tr.querySelector('.lp').classList.toggle('ovr', tr.dataset.ovr === '1');
@@ -207,7 +186,7 @@ function bomFor(code, date) {
 let bomRows = [];
 function renderBom() {
   const date = $('#rDate').value;
-  const lines = $$('#rLines tbody tr.line').map(tr => ({ code: tr.querySelector('.lc').value, qty: Number(tr.querySelector('.lq').value) || 0, price: Number(tr.querySelector('.lp').value) || 0, ovr: tr.dataset.ovr === '1' })).filter(l => l.code && l.qty > 0);
+  const lines = $$('#rLines tbody tr').map(tr => ({ code: tr.querySelector('.lc').value, qty: Number(tr.querySelector('.lq').value) || 0, price: Number(tr.querySelector('.lp').value) || 0, ovr: tr.dataset.ovr === '1' })).filter(l => l.code && l.qty > 0);
   bomRows = [];
   if (!lines.length) { $('#bomBody').innerHTML = '<div class="muted small" style="padding:14px;text-align:center">품목과 수량을 입력하면 여기에 ERP 등록용 부품 목록이 나옵니다.</div>'; $('#bomCopy').disabled = true; $$('.ccol').forEach(b => b.disabled = true); return; }
   let html = '', grand = 0;
@@ -284,7 +263,7 @@ async function copyCol(rows, col) {
 }
 $$('.ccol').forEach(b => b.onclick = () => copyCol(bomRows, b.dataset.col));
 $('#rAddLine').onclick = () => addLine().querySelector('.lc').focus();
-$('#rDate').onchange = () => { $$('#rLines tbody tr.line').forEach(autoPrice); calc(); checkPO(); loadRecent(); };
+$('#rDate').onchange = () => { $$('#rLines tbody tr').forEach(autoPrice); calc(); checkPO(); loadRecent(); };
 let poTimer;
 $('#rPO').oninput = () => { $('#rPO').value = $('#rPO').value.toUpperCase().replace(/\s/g, ''); clearTimeout(poTimer); poTimer = setTimeout(checkPO, 250); };
 async function checkPO() {
@@ -306,17 +285,16 @@ function resetForm() {
 }
 $('#rReset').onclick = () => { resetForm(); $('#rPO').focus(); };
 $('#rSave').onclick = async () => {
-  const lines = $$('#rLines tbody tr.line').map(tr => ({ code: tr.querySelector('.lc').value, qty: Number(tr.querySelector('.lq').value), unit_price: Number(tr.querySelector('.lp').value), overridden: tr.dataset.ovr === '1' })).filter(l => l.code || l.qty);
+  const lines = $$('#rLines tbody tr').map(tr => ({ code: tr.querySelector('.lc').value, qty: Number(tr.querySelector('.lq').value), unit_price: Number(tr.querySelector('.lp').value), overridden: tr.dataset.ovr === '1' })).filter(l => l.code || l.qty);
   if (!$('#rDate').value) return toast('입고일을 입력하세요', 1);
   if (!(await checkPO())) return toast('P/O No를 확인하세요', 1);
   if (!lines.length) return toast('품목을 1개 이상 입력하세요', 1);
   if (lines.some(l => !l.code || !(l.qty > 0))) return toast('품목과 수량을 확인하세요', 1);
-  if ($$('#rLines tbody tr.line').some(tr => tr.querySelector('.lc').value && tr.querySelector('.lp').value === '')) return toast('단가가 없는 품목이 있습니다 (기준정보에 단가 등록 필요)', 1);
+  if ($$('#rLines tbody tr').some(tr => tr.querySelector('.lc').value && tr.querySelector('.lp').value === '')) return toast('단가가 없는 품목이 있습니다 (기준정보에 단가 등록 필요)', 1);
   const dup = lines.map(l => l.code).filter((c, i, a) => a.indexOf(c) !== i);
   if (dup.length) return toast('같은 품목이 두 줄 있습니다 — 수량을 합쳐 주세요', 1);
   $('#rSave').disabled = true;
-  const tags = $$('#rLines tbody tr.line').map(cwtNote).filter(Boolean).join(' ');
-  const head = { po: $('#rPO').value, recv_date: $('#rDate').value, vendor: S.vendor, note: [$('#rNote').value.replace(CWT_TAG, '').trim(), tags].filter(Boolean).join(' ') || null };
+  const head = { po: $('#rPO').value, recv_date: $('#rDate').value, vendor: S.vendor, note: $('#rNote').value.trim() || null };
   let error = null;
   if (!S.editId) {
     ({ error } = await sb.rpc('pm_new_receipt', { p: { ...head, lines } }));
@@ -357,9 +335,8 @@ function editReceipt(r) {
   if (r.vendor && r.vendor !== S.vendor) setVendor(r.vendor);
   go('reg');
   S.editId = r.id; $('#regTitle').textContent = '입고 수정 — ' + r.vendor + ' · ' + r.po; $('#rSave').textContent = '수정 저장'; $('#rReset').textContent = '수정 취소';
-  const cw = [...(r.note || '').matchAll(CWT_TAG)][0];
-  $('#rDate').value = r.recv_date; $('#rPO').value = r.po; $('#rNote').value = (r.note || '').replace(CWT_TAG, '').trim();
-  $('#rLines tbody').innerHTML = ''; r.lines.forEach(l => addLine({ code: l.code, qty: Number(l.qty), unit_price: Number(l.unit_price), overridden: l.price_overridden, ...(cw && isCWT(S.itemMap[l.code]) ? { gross: Number(cw[1]), pallets: Number(cw[2]) } : {}) }));
+  $('#rDate').value = r.recv_date; $('#rPO').value = r.po; $('#rNote').value = r.note || '';
+  $('#rLines tbody').innerHTML = ''; r.lines.forEach(l => addLine({ code: l.code, qty: Number(l.qty), unit_price: Number(l.unit_price), overridden: l.price_overridden }));
   checkPO(); loadRecent();
 }
 
@@ -428,7 +405,7 @@ $('#lXls').onclick = () => {
 };
 
 /* ================= 월 마감 ================= */
-const C = { erp: null, erpName: '', ven: null, venName: '', regs: [], closing: null, sel: [] };
+const C = { erp: null, erpName: '', ven: null, venName: '', pur: null, purName: '', regs: [], closing: null, sel: [] };
 function readFile(f) { return new Promise((ok, ng) => { const r = new FileReader(); r.onload = () => { try { ok(XLSX.read(new Uint8Array(r.result), { type: 'array' })); } catch (e) { ng(e); } }; r.onerror = ng; r.readAsArrayBuffer(f); }); }
 function setupDrop(id, onFile) {
   const d = $(id), inp = d.querySelector('input');
@@ -442,6 +419,7 @@ const fileLine = (ok, name, info) => `<div>${ok ? '<span class="tag t-ok">OK</sp
 setupDrop('#dErp', async f => {
   try {
     const wb = await readFile(f); const e = Recon.parseERP(wb, XLSX);
+    if (!e && Recon.parsePurchase(wb, XLSX)) { toast('매입내역등록 파일입니다 — 오른쪽 "대조 기준" 칸에 넣었습니다'); return loadPur(f, wb); }
     if (!e || !e.lines.length) throw new Error('입고상세조회 머리글(입고번호, P/O No)을 찾지 못했습니다');
     C.erp = e; C.erpName = f.name;
     const mc = {}; e.lines.forEach(l => { const m = (l.date || '').slice(0, 7); mc[m] = (mc[m] || 0) + 1; });
@@ -459,6 +437,42 @@ setupDrop('#dVen', async f => {
   } catch (err) { C.ven = null; $('#dVen').classList.remove('has'); $('#dVen .files').innerHTML = fileLine(0, f.name, err.message); }
   refreshClose();
 });
+async function loadPur(f, wb) {
+  try {
+    wb = wb || await readFile(f); const p = Recon.parsePurchase(wb, XLSX);
+    if (!p || !p.lines.length) throw new Error('매입내역 머리글(매입수량, P/O No)을 찾지 못했습니다');
+    C.pur = p; C.purName = f.name;
+  } catch (err) { C.pur = null; C.purErr = fileLine(0, f.name, err.message); }
+  showPurInfo(); refreshClose();
+}
+setupDrop('#dPur', f => loadPur(f));
+// 매입내역 중 선택 업체분: ERP 입고 파일과 입고번호 / P/O로 연결 (매입 파일에 거래처가 없어도 됨)
+function purFor() {
+  if (!C.pur) return null;
+  const all = C.pur.lines;
+  if (!C.erp) return { lines: [], unknown: [] };
+  const mine = erpFor(S.vendor).lines, gr = new Set(mine.map(l => l.gr).filter(Boolean)), po = new Set(mine.map(l => l.po));
+  const allPO = new Set(C.erp.lines.map(l => l.po)), allGR = new Set(C.erp.lines.map(l => l.gr).filter(Boolean));
+  const v = S.vendors.find(x => x.name === S.vendor) || {};
+  const lines = [], unknown = [];
+  all.forEach(l => {
+    if ((l.gr && gr.has(l.gr)) || po.has(l.po)) lines.push(l);
+    else if (!(l.gr && allGR.has(l.gr)) && !allPO.has(l.po)) { if (!l.vcode || !v.erp_code || l.vcode === String(v.erp_code)) unknown.push(l); }
+  });
+  return { lines, unknown };
+}
+function showPurInfo() {
+  const d = $('#dPur'), box = $('#cPurFiles');
+  d.classList.toggle('has', !!C.pur);
+  if (!C.pur) { box.innerHTML = C.purErr || ''; C.purErr = ''; return; }
+  const all = C.pur.lines, sumA = a => a.reduce((s, l) => s + l.amt, 0), nPO = a => new Set(a.map(l => l.po)).size;
+  const pf = purFor(), zero = new Set((pf ? pf.lines.concat(pf.unknown) : all).filter(l => !l.price).map(l => l.po));
+  box.innerHTML = fileLine(1, C.purName, `전체 ${all.length}행 · P/O ${nPO(all)}건 · ${fmt(sumA(all))}원`) + ' <button id="purX" style="padding:1px 8px;font-size:11px">× 빼기</button>' +
+    (C.erp ? `<div style="margin-top:4px"><b>${esc(S.vendor)}</b> 해당(ERP 입고와 연결): P/O ${nPO(pf.lines)}건 · <b>${fmt(sumA(pf.lines))}</b>원${pf.unknown.length ? ` <span class="err">· ERP 입고에 없는 매입 P/O ${nPO(pf.unknown)}건</span>` : ''}</div>` : '<div class="muted">ERP 입고상세조회를 넣으면 업체별로 나눠 대조합니다</div>') +
+    (zero.size ? `<div class="err">매입단가 0 품목이 있는 P/O ${zero.size}건: ${esc([...zero].slice(0, 6).join(', '))}${zero.size > 6 ? ' …' : ''}</div>` : '') +
+    '<div class="muted">→ 이번 대조는 웹 입고 등록 대신 <b>매입내역</b> 기준</div>';
+  $('#purX').onclick = e => { e.stopPropagation(); C.pur = null; C.purName = ''; showPurInfo(); refreshClose(); };
+}
 $('#cMonth').onchange = loadCloseInfo;
 function erpFor(vendorName) {
   const v = S.vendors.find(x => x.name === vendorName) || {};
@@ -474,7 +488,7 @@ function showErpInfo() {
   $('#dErp .files').innerHTML = fileLine(1, C.erpName, `전체 ${all.length}행`) +
     `<div style="margin-top:4px"><b>${esc(S.vendor)}</b> 해당: ${mine.length}행 · P/O ${pos}건 · <b>${fmt(amt)}</b>원${mine.length ? '' : ' <span class="err">— 이 업체 입고가 파일에 없습니다</span>'}</div>` +
     (Object.keys(byV).length > 1 ? `<div class="muted">파일 내 거래처: ${Object.entries(byV).map(([k, a]) => esc(k) + ' ' + fmt(a)).join(' · ')}</div>` : '');
-  refreshClose();
+  showPurInfo(); refreshClose();
 }
 async function loadCloseInfo() {
   const m = $('#cMonth').value || prevMonth(), yymm = 'PO' + m.slice(2, 4) + m.slice(5, 7);
@@ -504,22 +518,31 @@ function refreshClose() {
     $('#sheetList').innerHTML = C.ven.sheets.map(s => `<label><input type="checkbox" data-sheet="${esc(s.sheet)}" ${auto.has(s.sheet) ? 'checked' : ''}> <b>${esc(s.sheet)}</b> <span class="muted">${esc(s.title)}</span> ${idx.has(s.sum) ? `<span class="tag t-ok">INDEX "${esc(idx.get(s.sum))}" 일치</span>` : ''}<span class="sum">${s.rows.length}행 · ${fmt(s.sum)}원</span></label>`).join('');
   }
   $('#btnRun').disabled = !C.erp;
-  $('#runInfo').textContent = !C.erp ? 'ERP 입고상세조회를 넣으면 실행할 수 있습니다' : `[${S.vendor}] ` + (C.ven ? 'ERP · 업체 명세서 · 입고 등록 3자 대조' : 'ERP ↔ 입고 등록 대조 (업체 명세서 없음)');
+  const src = C.pur ? '매입내역' : '입고 등록';
+  $('#runInfo').textContent = !C.erp ? 'ERP 입고상세조회를 넣으면 실행할 수 있습니다' : `[${S.vendor}] ` + (C.ven ? `ERP 입고 · 업체 명세서 · ${src} 3자 대조` : `ERP 입고 ↔ ${src} 대조 (업체 명세서 없음)`);
 }
 $('#btnRun').onclick = () => {
   C.sel = $$('#sheetList input:checked').map(x => x.dataset.sheet);
   const vendorSheets = C.ven ? C.ven.sheets.filter(s => C.sel.includes(s.sheet)) : [];
-  const entries = C.regs.map(r => ({ file: '입고등록', sheet: r.created_by_name || '(이름 없음)', row: null, po: r.po, amt: Math.round(r.amount), date: r.recv_date, qty: r.lines.reduce((s, l) => s + Number(l.qty), 0), model: r.lines.map(l => S.itemMap[l.code]?.name || l.code).join(', ') }));
+  const pf = purFor();
+  const entries = pf ? pf.lines.concat(pf.unknown).map(l => ({ file: '입고등록', sheet: 'ERP 매입', row: null, po: l.po, amt: l.amt, date: l.date, qty: 0, model: '' }))
+    : C.regs.map(r => ({ file: '입고등록', sheet: r.created_by_name || '(이름 없음)', row: null, po: r.po, amt: Math.round(r.amount), date: r.recv_date, qty: r.lines.reduce((s, l) => s + Number(l.qty), 0), model: r.lines.map(l => S.itemMap[l.code]?.name || l.code).join(', ') }));
   const staff = entries.length ? [{ file: '입고등록', entries, skippedSheets: [] }] : [];
   const erpV = erpFor(S.vendor);
   if (!erpV.lines.length) return toast(`ERP 파일에 ${S.vendor} 입고가 없습니다 (기준정보 > 업체의 거래처코드 확인)`, 1);
-  S.closeRes = Recon.reconcile({ erp: erpV, vendorSheets, staff }, S.master); S.closeRes.vendor = S.vendor;
-  // 단가 수정 건 표시
-  const ovr = new Set(C.regs.filter(r => r.lines.some(l => l.price_overridden)).map(r => r.po));
-  S.closeRes.rows.forEach(x => { if (ovr.has(x.po)) x.issues = (x.issues ? x.issues + ' · ' : '') + '입고 등록 시 단가 직접 수정'; x.staffWhere = x.staffWhere.replace(/입고등록 \/ /g, ''); });
+  S.closeRes = Recon.reconcile({ erp: erpV, vendorSheets, staff }, S.master); S.closeRes.vendor = S.vendor; S.closeRes.src = pf ? 'pur' : 'reg'; S.closeRes.summary.src = S.closeRes.src;
+  // 단가 수정 건 / 매입단가 0 표시
+  const ovr = pf ? new Set() : new Set(C.regs.filter(r => r.lines.some(l => l.price_overridden)).map(r => r.po));
+  const zero = {}; if (pf) pf.lines.forEach(l => { if (!l.price) zero[l.po] = (zero[l.po] || 0) + 1; });
+  const add = (x, t) => { x.issues = (x.issues ? x.issues + ' · ' : '') + t; };
+  S.closeRes.rows.forEach(x => { if (ovr.has(x.po)) add(x, '입고 등록 시 단가 직접 수정'); if (zero[x.po]) { add(x, `매입단가 0 품목 ${zero[x.po]}개`); if (x.status === 'ok') x.status = 'warn'; } x.staffWhere = x.staffWhere.replace(/입고등록 \/ /g, ''); });
+  { const sm = S.closeRes.summary; ['ok', 'warn', 'bad'].forEach(k => sm[k] = S.closeRes.rows.filter(x => x.status === k).length); }
   renderClose(); $('#btnXls').disabled = false; $('#btnClose').disabled = false;
   $('#kpis').scrollIntoView({ behavior: 'smooth' });
 };
+// 매입내역 기준 대조일 때 '입고 등록' 문구를 '매입'으로 바꿔 표시
+const PL = t => S.closeRes && S.closeRes.src === 'pur' ? String(t).replace(/입고 등록이 안 된/g, '매입이 안 된').replace(/입고 등록됐지만/g, '매입됐지만').replace(/입고 미등록/g, '매입 미등록').replace(/입고 등록/g, '매입내역').replace(/등록 담당/g, '매입 출처').replace(/등록(?=[ −])/g, '매입').replace(/>담당</g, '>출처<') : t;
+const setPL = (sel, html) => { $(sel).innerHTML = PL(html); };
 const ST = { ok: ['일치', 't-ok'], warn: ['확인필요', 't-warn'], bad: ['불일치', 't-bad'] };
 const PO_HEAD = '<thead><tr><th>상태</th><th>모델 (ERP 식별)</th><th>P/O No</th><th>ERP 입고일</th><th>날짜 차이</th><th class="num">대수/수량</th><th class="num">ERP 금액</th><th class="num">등록 금액</th><th class="num">등록−ERP</th><th class="num">업체 금액</th><th class="num">업체−ERP</th><th>등록 담당</th><th>확인 내용</th></tr></thead>';
 function renderEmpty() {
@@ -533,13 +556,14 @@ function renderEmpty() {
 }
 function renderClose() {
   const r = S.closeRes, s = r.summary, d1 = s.vendorAmt - s.erpAmt, d2 = s.staffAmt - s.erpAmt;
-  $('#kpis').innerHTML = `
+  $('#kpis').innerHTML = PL(`
    <div class="kpi"><div class="l">ERP 입고 · ${esc(r.vendor)} (${esc(s.month)})</div><div class="v">${fmt(s.erpAmt)}</div><div class="d muted">P/O ${s.erpPOs}건</div></div>
    ${s.hasVendor ? `<div class="kpi"><div class="l">업체 명세서 (선택 시트)</div><div class="v">${fmt(s.vendorAmt)}</div><div class="d ${d1 ? 'diff' : 'muted'}">ERP 대비 ${d1 > 0 ? '+' : ''}${fmt(d1)}</div></div>` : '<div class="kpi"><div class="l">업체 명세서</div><div class="v muted">미사용</div><div class="d muted">ERP ↔ 입고 등록만 대조</div></div>'}
    <div class="kpi"><div class="l">입고 등록 (ERP P/O 해당분)</div><div class="v">${fmt(s.staffAmt)}</div><div class="d ${d2 ? 'diff' : 'muted'}">P/O ${s.staffPOs}/${s.erpPOs}건 · ERP 대비 ${d2 > 0 ? '+' : ''}${fmt(d2)}</div></div>
    <div class="kpi ok"><div class="l">일치 P/O (P/O·금액)</div><div class="v">${s.ok}</div><div class="d muted">${s.dateDiff ? `날짜만 다른 P/O ${s.dateDiff}건 포함` : '날짜 차이 없음'}</div></div>
    <div class="kpi warn"><div class="l">확인필요 P/O</div><div class="v">${s.warn}</div><div class="d muted">미등록·모델 표기 등</div></div>
-   <div class="kpi bad"><div class="l">불일치 P/O / 업체에만 있는 행</div><div class="v">${s.bad} / ${s.vOnly}</div><div class="d muted">${s.vOnly ? '업체에만 ' + fmt(s.vOnlyAmt) + '원' : ''}</div></div>`;
+   <div class="kpi bad"><div class="l">불일치 P/O / 업체에만 있는 행</div><div class="v">${s.bad} / ${s.vOnly}</div><div class="d muted">${s.vOnly ? '업체에만 ' + fmt(s.vOnlyAmt) + '원' : ''}</div></div>`);
+  $('#tabs [data-t=stf]').textContent = r.src === 'pur' ? '매입내역 점검' : '입고 등록 점검';
   const models = [...new Set(r.rows.map(x => x.model))].sort();
   $('#fModel').innerHTML = '<option value="">모델: 전체</option>' + models.map(m => `<option>${esc(m)}</option>`).join('');
   $('#fStatus').value = s.bad || s.warn ? 'nok' : '';
@@ -551,7 +575,7 @@ function renderPO() {
   const rows = r.rows.filter(x => (!fs || (fs === 'nok' ? x.status !== 'ok' : fs === 'date' ? !!x.dateNote : x.status === fs)) && (!fm || x.model === fm) && (!ft || (x.po + x.staffWhere + x.issues + x.model).toUpperCase().includes(ft)));
   $('#poCount').textContent = `${rows.length} / ${r.rows.length}건`;
   const dc = v => v == null ? '' : `<span class="${v ? 'diff' : ''}">${v > 0 ? '+' : ''}${fmt(v)}</span>`;
-  $('#tPO').innerHTML = PO_HEAD + '<tbody>' + (rows.length ? rows.map(x => `<tr class="${x.status === 'ok' ? '' : x.status}"><td class="c"><span class="tag ${ST[x.status][1]}">${ST[x.status][0]}</span></td><td>${esc(x.model)}</td><td class="nw">${esc(x.po)}</td><td class="nw">${esc(x.date)}</td><td>${x.dateNote ? `<span class="tag t-date">${esc(x.dateNote.replace(/담당/g, '등록'))}</span>` : ''}</td><td class="num">${x.qty == null ? '' : fmt(x.qty)}</td><td class="num">${fmt(x.erpAmt)}</td><td class="num">${fmt(x.staffAmt)}</td><td class="num">${dc(x.staffDiff)}</td><td class="num">${fmt(x.vendorAmt)}</td><td class="num">${dc(x.vendorDiff)}</td><td class="small nw">${esc(x.staffWhere)}</td><td class="small">${esc(x.issues.replace(/담당자 파일 미기재/g, '입고 미등록').replace(/담당자/g, '등록'))}</td></tr>`).join('') : '<tr class="empty"><td colspan="13">조건에 맞는 P/O가 없습니다</td></tr>') + '</tbody>';
+  setPL('#tPO', PO_HEAD + '<tbody>' + (rows.length ? rows.map(x => `<tr class="${x.status === 'ok' ? '' : x.status}"><td class="c"><span class="tag ${ST[x.status][1]}">${ST[x.status][0]}</span></td><td>${esc(x.model)}</td><td class="nw">${esc(x.po)}</td><td class="nw">${esc(x.date)}</td><td>${x.dateNote ? `<span class="tag t-date">${esc(x.dateNote.replace(/담당/g, '등록'))}</span>` : ''}</td><td class="num">${x.qty == null ? '' : fmt(x.qty)}</td><td class="num">${fmt(x.erpAmt)}</td><td class="num">${fmt(x.staffAmt)}</td><td class="num">${dc(x.staffDiff)}</td><td class="num">${fmt(x.vendorAmt)}</td><td class="num">${dc(x.vendorDiff)}</td><td class="small nw">${esc(x.staffWhere)}</td><td class="small">${esc(x.issues.replace(/담당자 파일 미기재/g, '입고 미등록').replace(/담당자/g, '등록'))}</td></tr>`).join('') : '<tr class="empty"><td colspan="13">조건에 맞는 P/O가 없습니다</td></tr>') + '</tbody>');
 }
 ['#fStatus', '#fModel'].forEach(id => $(id).onchange = renderPO); $('#fText').oninput = renderPO;
 function renderModel() {
@@ -560,9 +584,9 @@ function renderModel() {
   const dc = v => `<span class="${v ? 'diff' : ''}">${v > 0 ? '+' : ''}${fmt(v)}</span>`;
   const q = x => !x.qty ? '' : x.unit === '대' ? fmt(x.qty) + ' 대' : `${fmt(x.qty)} ${esc((x.unit || '').toLowerCase())}`;
   const hv = S.closeRes.summary.hasVendor;
-  $('#tModel').innerHTML = '<thead><tr><th>모델 / 품목군</th><th class="num">P/O</th><th class="num">대수 / 수량</th><th class="num">ERP</th><th class="num">업체</th><th class="num">업체−ERP</th><th class="num">입고 등록</th><th class="num">등록−ERP</th></tr></thead><tbody>' +
+  setPL('#tModel', '<thead><tr><th>모델 / 품목군</th><th class="num">P/O</th><th class="num">대수 / 수량</th><th class="num">ERP</th><th class="num">업체</th><th class="num">업체−ERP</th><th class="num">입고 등록</th><th class="num">등록−ERP</th></tr></thead><tbody>' +
     b.map(x => `<tr class="${(hv && x.vendor !== x.erp) || x.staff !== x.erp ? 'bad' : ''}"><td>${esc(x.model)}</td><td class="num">${x.pos}</td><td class="num">${q(x)}</td><td class="num">${fmt(x.erp)}</td><td class="num">${hv ? fmt(x.vendor) : ''}</td><td class="num">${hv ? dc(x.vendor - x.erp) : ''}</td><td class="num">${fmt(x.staff)}</td><td class="num">${dc(x.staff - x.erp)}</td></tr>`).join('') +
-    `<tr style="font-weight:700"><td>합계</td><td class="num">${t.pos}</td><td class="num">${fmt(t.qty)} 대</td><td class="num">${fmt(t.erp)}</td><td class="num">${hv ? fmt(t.vendor) : ''}</td><td class="num">${hv ? dc(t.vendor - t.erp) : ''}</td><td class="num">${fmt(t.staff)}</td><td class="num">${dc(t.staff - t.erp)}</td></tr></tbody>`;
+    `<tr style="font-weight:700"><td>합계</td><td class="num">${t.pos}</td><td class="num">${fmt(t.qty)} 대</td><td class="num">${fmt(t.erp)}</td><td class="num">${hv ? fmt(t.vendor) : ''}</td><td class="num">${hv ? dc(t.vendor - t.erp) : ''}</td><td class="num">${fmt(t.staff)}</td><td class="num">${dc(t.staff - t.erp)}</td></tr></tbody>`);
 }
 function vtable(list, extra) { return list.length ? `<div class="tw" style="max-height:40vh"><table><thead><tr><th>시트</th><th class="num">행</th><th>구분</th><th>품번/모델</th><th>일자</th><th class="num">단가</th><th class="num">수량</th><th class="num">금액</th><th>${extra}</th></tr></thead><tbody>${list.map(v => `<tr><td>${esc(v.sheet)}</td><td class="num">${v.row}</td><td>${esc(v.vkind)}</td><td>${esc(v.code)}</td><td>${esc(v.date || v.rawDate)}</td><td class="num">${fmt(v.price)}</td><td class="num">${fmt(v.qty)}</td><td class="num">${fmt(v.amt)}</td><td class="small">${esc(v.why || v.note || '')}</td></tr>`).join('')}</tbody></table></div>` : '<div class="muted small">해당 없음</div>'; }
 function renderVen() {
@@ -576,10 +600,10 @@ function renderVen() {
 function renderStf() {
   const r = S.closeRes, miss = r.rows.filter(x => !x.staffWhere);
   const st = list => list.length ? `<div class="tw" style="max-height:40vh"><table><thead><tr><th>담당</th><th>P/O No</th><th>입고일</th><th class="num">금액</th></tr></thead><tbody>${list.map(e => `<tr><td>${esc(e.sheet)}</td><td>${esc(e.po)}</td><td>${esc(e.date)}</td><td class="num">${fmt(e.amt)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="muted small">해당 없음</div>';
-  $('#t-stf').innerHTML = `<h3 style="color:var(--bad)">① 입고 등록됐지만 ERP 조회 파일에 없는 P/O — ${r.staffNoERP.length}건</h3><div class="muted small" style="margin-bottom:4px">P/O 오기재이거나 ERP 미입고 처리, 또는 ERP 조회 조건에서 빠진 품목입니다.</div>${st(r.staffNoERP)}
+  setPL('#t-stf', `<h3 style="color:var(--bad)">① 입고 등록됐지만 ERP 조회 파일에 없는 P/O — ${r.staffNoERP.length}건</h3><div class="muted small" style="margin-bottom:4px">P/O 오기재이거나 ERP 미입고 처리, 또는 ERP 조회 조건에서 빠진 품목입니다.</div>${st(r.staffNoERP)}
    <h3 style="color:var(--warn)">② ERP에는 있지만 입고 등록이 안 된 P/O — ${miss.length}건</h3>
    ${miss.length ? `<div class="tw" style="max-height:40vh"><table><thead><tr><th>P/O No</th><th>모델</th><th>ERP 입고일</th><th class="num">ERP 금액</th></tr></thead><tbody>${miss.map(x => `<tr><td>${esc(x.po)}</td><td>${esc(x.model)}</td><td>${esc(x.date)}</td><td class="num">${fmt(x.erpAmt)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="muted small">해당 없음</div>'}
-   <h3 style="color:var(--mut)">③ 대상월(${esc(r.summary.poPrefix)}…) 외 P/O로 등록된 건 — ${r.staffOther.length}건 (대조 제외)</h3>${st(r.staffOther.map(e => ({ ...e })))}`;
+   <h3 style="color:var(--mut)">③ 대상월(${esc(r.summary.poPrefix)}…) 외 P/O로 등록된 건 — ${r.staffOther.length}건 (대조 제외)</h3>${st(r.staffOther.map(e => ({ ...e })))}`);
 }
 $('#tabs').onclick = e => { const t = e.target.dataset.t; if (!t) return; $$('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === t)); ['po', 'model', 'ven', 'stf', 'hist'].forEach(k => $('#t-' + k).classList.toggle('hide', k !== t)); };
 async function loadHist() {
@@ -593,7 +617,7 @@ $('#btnClose').onclick = async () => {
   if (m !== $('#cMonth').value && !confirm(`ERP 파일의 월(${m})과 선택한 마감월(${$('#cMonth').value})이 다릅니다. ${m}로 마감할까요?`)) return;
   if ((s.bad || s.warn) && !confirm(`불일치 ${s.bad}건, 확인필요 ${s.warn}건이 남아 있습니다. 그래도 ${m} 마감을 확정할까요?`)) return;
   if (!confirm(`${S.vendor} ${m} 마감을 확정하면 해당 업체·월 입고는 수정·삭제할 수 없게 잠깁니다 (관리자만 해제 가능). 진행할까요?`)) return;
-  const row = { month: m, vendor: S.vendor, locked: true, erp_amt: s.erpAmt, vendor_amt: s.hasVendor ? s.vendorAmt : null, staff_amt: s.staffAmt, ok: s.ok, warn: s.warn, bad: s.bad, date_diff: s.dateDiff, summary: s, rows: r.rows, erp_file: C.erpName, vendor_file: s.hasVendor ? C.venName : null, created_by_name: S.prof.name };
+  const row = { month: m, vendor: S.vendor, locked: true, erp_amt: s.erpAmt, vendor_amt: s.hasVendor ? s.vendorAmt : null, staff_amt: s.staffAmt, ok: s.ok, warn: s.warn, bad: s.bad, date_diff: s.dateDiff, summary: s, rows: r.rows, erp_file: C.erpName + (C.pur && r.src === 'pur' ? ' / 매입: ' + C.purName : ''), vendor_file: s.hasVendor ? C.venName : null, created_by_name: S.prof.name };
   let res;
   if (C.closing && C.closing.month === m) res = await sb.from('pm_closings').update(row).eq('month', m).eq('vendor', S.vendor);
   else res = await sb.from('pm_closings').insert(row);
@@ -616,11 +640,11 @@ $('#btnXls').onclick = () => {
   }
   const lab = { ok: '일치', warn: '확인필요', bad: '불일치' };
   const sum = [['ERP 입고 합계', s.erpAmt, `P/O ${s.erpPOs}건`], ['업체 명세서 합계', s.hasVendor ? s.vendorAmt : '미사용', s.hasVendor ? `ERP 대비 ${fmt(s.vendorAmt - s.erpAmt)}` : ''], ['입고 등록 합계(ERP P/O 해당분)', s.staffAmt, `P/O ${s.staffPOs}건 · ERP 대비 ${fmt(s.staffAmt - s.erpAmt)}`], ['일치 P/O', s.ok, `날짜만 다른 P/O ${s.dateDiff}건 포함`], ['확인필요 P/O', s.warn, ''], ['불일치 P/O', s.bad, ''], ['업체 명세서에만 있는 행', s.vOnly, ''], ['ERP에 없는 등록 P/O', s.staffNoERP, ''], [], ['ERP 파일', C.erpName, ''], ['업체 파일', s.hasVendor ? C.venName : '', C.sel.join(', ')], ['작성', S.prof.name + ' · ' + new Date().toLocaleString('ko-KR'), '']];
-  XLSX.utils.book_append_sheet(wb, sheet(`${r.vendor} 월마감 입고 대사 — ${s.month}`, ['항목', '값', '비고'], sum, [32, 22, 60], [1]), '요약');
-  const po = r.rows.map(x => { const a = [lab[x.status], x.model, x.po, x.date, x.dateNote, x.qty, x.erpAmt, x.staffAmt, x.staffDiff, x.vendorAmt, x.vendorDiff, x.staffWhere, x.issues]; a.__st = x.status; return a; });
-  XLSX.utils.book_append_sheet(wb, sheet(`P/O별 대조 — ${s.month}`, ['상태', '모델', 'P/O No', 'ERP 입고일', '날짜 차이', '대수/수량', 'ERP 금액', '등록 금액', '등록−ERP', '업체 금액', '업체−ERP', '등록 담당', '확인 내용'], po, [9, 24, 13, 11, 18, 9, 14, 14, 11, 14, 11, 12, 46], [5, 6, 7, 8, 9, 10]), 'PO별대조');
+  XLSX.utils.book_append_sheet(wb, sheet(`${r.vendor} 월마감 입고 대사 — ${s.month}` + (r.src === 'pur' ? ' (매입내역 기준)' : ''), ['항목', '값', '비고'], sum.map(a => a.length ? [PL(a[0]), a[1], PL(a[2])] : a), [32, 22, 60], [1]), '요약');
+  const po = r.rows.map(x => { const a = [lab[x.status], x.model, x.po, x.date, x.dateNote, x.qty, x.erpAmt, x.staffAmt, x.staffDiff, x.vendorAmt, x.vendorDiff, x.staffWhere, PL(x.issues.replace(/담당자 파일 미기재/g, '입고 미등록').replace(/담당자/g, '등록'))]; a.__st = x.status; return a; });
+  XLSX.utils.book_append_sheet(wb, sheet(`P/O별 대조 — ${s.month}`, ['상태', '모델', 'P/O No', 'ERP 입고일', '날짜 차이', '대수/수량', 'ERP 금액', '등록 금액', '등록−ERP', '업체 금액', '업체−ERP', '등록 담당', '확인 내용'].map(PL), po, [9, 24, 13, 11, 18, 9, 14, 14, 11, 14, 11, 12, 46], [5, 6, 7, 8, 9, 10]), 'PO별대조');
   const bm = r.byModel.map(x => { const a = [x.model, x.pos, x.qty || null, x.unit || '', x.erp, s.hasVendor ? x.vendor : null, s.hasVendor ? x.vendor - x.erp : null, x.staff, x.staff - x.erp]; a.__st = (s.hasVendor && x.vendor !== x.erp) || x.staff !== x.erp ? 'bad' : 'ok'; return a; });
-  XLSX.utils.book_append_sheet(wb, sheet('모델·품목군별 소계', ['모델/품목군', 'P/O', '대수/수량', '단위', 'ERP', '업체', '업체−ERP', '입고 등록', '등록−ERP'], bm, [24, 6, 10, 6, 16, 16, 12, 16, 12], [1, 2, 4, 5, 6, 7, 8]), '모델별');
+  XLSX.utils.book_append_sheet(wb, sheet('모델·품목군별 소계', ['모델/품목군', 'P/O', '대수/수량', '단위', 'ERP', '업체', '업체−ERP', '입고 등록', '등록−ERP'].map(PL), bm, [24, 6, 10, 6, 16, 16, 12, 16, 12], [1, 2, 4, 5, 6, 7, 8]), '모델별');
   XLSX.writeFile(wb, `입고대사_${r.vendor}_${s.month}.xlsx`);
 };
 
