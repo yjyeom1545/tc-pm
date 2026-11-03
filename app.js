@@ -488,7 +488,7 @@ async function loadCloseInfo() {
   const map = new Map(); [...a, ...b].forEach(r => map.set(r.id, r)); C.regs = [...map.values()];
   C.closing = cl.data;
   const tot = C.regs.reduce((s, r) => s + r.amount, 0), staffs = [...new Set(C.regs.map(r => r.created_by_name || ''))];
-  $('#cRegInfo').innerHTML = `<b>${esc(S.vendor)}</b> ${esc(m)} 입고 등록 <b>${C.regs.length}</b>건 · <b>${fmt(tot)}</b>원 · 담당 ${staffs.length}명`;
+  $('#cRegInfo').innerHTML = `<b>${esc(S.vendor)}</b> ${esc(m)} 웹등록 <b>${C.regs.length}</b>건 · <b>${fmt(tot)}</b>원 · 담당 ${staffs.length}명`;
   $('#cRegFiles').innerHTML = staffs.length ? staffs.map(s => { const rs = C.regs.filter(r => (r.created_by_name || '') === s); return `<div><span class="tag t-ok">DB</span> ${esc(s || '(이름 없음)')} <span class="muted">${rs.length}건 · ${fmt(rs.reduce((x, r) => x + r.amount, 0))}원</span></div>`; }).join('') : `<span class="muted">${esc(S.vendor)} 해당 월 등록 내역 없음</span>`;
   $('#cLockInfo').innerHTML = C.closing ? `<span class="tag ${C.closing.locked ? 't-bad' : 't-mut'}">${C.closing.locked ? '마감 확정(잠금)' : '마감 저장(잠금 해제)'}</span> ${esc(C.closing.created_by_name || '')} · ${esc(String(C.closing.created_at).slice(0, 16).replace('T', ' '))} ${S.prof.role === 'admin' && C.closing.locked ? '<button id="btnUnlock">잠금 해제</button>' : ''}` : '<span class="tag t-mut">미마감</span>';
   const ub = $('#btnUnlock'); if (ub) ub.onclick = async () => { if (!confirm(S.vendor + ' ' + m + ' 마감 잠금을 해제할까요? 해제하면 해당 월 입고를 다시 수정할 수 있습니다.')) return; const { error } = await sb.from('pm_closings').update({ locked: false }).eq('month', m).eq('vendor', S.vendor); if (error) return toast(krErr(error.message), 1); toast('잠금 해제'); loadCloseInfo(); };
@@ -506,7 +506,7 @@ function refreshClose() {
     $('#sheetList').innerHTML = C.ven.sheets.map(s => `<label><input type="checkbox" data-sheet="${esc(s.sheet)}" ${auto.has(s.sheet) ? 'checked' : ''}> <b>${esc(s.sheet)}</b> <span class="muted">${esc(s.title)}</span> ${idx.has(s.sum) ? `<span class="tag t-ok">INDEX "${esc(idx.get(s.sum))}" 일치</span>` : ''}<span class="sum">${s.rows.length}행 · ${fmt(s.sum)}원</span></label>`).join('');
   }
   $('#btnRun').disabled = !C.erp;
-  $('#runInfo').textContent = !C.erp ? 'ERP 매입내역등록(S)을 넣으면 실행할 수 있습니다' : `[${S.vendor}] ` + (C.ven ? 'ERP · 업체 명세서 · 입고 등록 3자 대조' : 'ERP ↔ 입고 등록 대조 (업체 명세서 없음)');
+  $('#runInfo').textContent = !C.erp ? 'ERP 매입내역등록(S)을 넣으면 실행할 수 있습니다' : `[${S.vendor}] ` + (C.ven ? 'ERP · 업체 명세서 · 웹등록 3자 대조' : 'ERP ↔ 웹등록 대조 (업체 명세서 없음)');
 }
 $('#btnRun').onclick = () => {
   C.sel = $$('#sheetList input:checked').map(x => x.dataset.sheet);
@@ -526,12 +526,12 @@ S.closeRes.rows.forEach(x => { if (ovr.has(x.po)) x.issues = (x.issues ? x.issue
   $('#kpis').scrollIntoView({ behavior: 'smooth' });
 };
 const ST = { ok: ['일치', 't-ok'], warn: ['확인필요', 't-warn'], bad: ['불일치', 't-bad'] };
-const PO_HEAD = '<thead><tr><th>상태</th><th>모델 (ERP 식별)</th><th>P/O No</th><th>ERP 입고일</th><th>날짜 차이</th><th class="num">대수/수량</th><th class="num">ERP 금액</th><th class="num">등록 금액</th><th class="num">등록−ERP</th><th class="num">업체 금액</th><th class="num">업체−ERP</th><th>등록 담당</th><th>확인 내용</th></tr></thead>';
+const PO_HEAD = '<thead><tr><th>상태</th><th>모델 (ERP 식별)</th><th>P/O No</th><th>ERP 입고일</th><th>날짜 차이</th><th class="num">대수/수량</th><th class="num">웹등록</th><th class="num">ERP 금액</th><th class="num">웹등록−ERP</th><th class="num">업체 금액</th><th class="num">업체−ERP</th><th>웹등록 담당</th><th>확인 내용</th></tr></thead>';
 function renderEmpty() {
   const k = (l, d, c = '') => `<div class="kpi ${c}"><div class="l">${l}</div><div class="v muted">—</div><div class="d muted">${d}</div></div>`;
-  $('#kpis').innerHTML = k('ERP 매입', 'P/O —건') + k('업체 명세서', 'ERP 대비 —') + k('입고 등록', 'ERP 대비 —') + k('일치 P/O (P/O·금액)', '날짜 차이 —', 'ok') + k('확인필요 P/O', '미등록·모델 표기 등', 'warn') + k('불일치 P/O / 업체에만 있는 행', '', 'bad');
+  $('#kpis').innerHTML = k('ERP 매입', 'P/O —건') + k('업체 명세서', 'ERP 대비 —') + k('웹등록', 'ERP 대비 —') + k('일치 P/O (P/O·금액)', '날짜 차이 —', 'ok') + k('확인필요 P/O', '미등록·모델 표기 등', 'warn') + k('불일치 P/O / 업체에만 있는 행', '', 'bad');
   $('#tPO').innerHTML = PO_HEAD + '<tbody><tr class="empty"><td colspan="13">ERP 매입내역등록(S)을 넣고 [대조 실행]을 누르면 P/O별 결과가 표시됩니다.</td></tr></tbody>';
-  $('#tModel').innerHTML = '<thead><tr><th>모델 / 품목군</th><th class="num">P/O</th><th class="num">대수 / 수량</th><th class="num">ERP</th><th class="num">업체</th><th class="num">업체−ERP</th><th class="num">입고 등록</th><th class="num">등록−ERP</th></tr></thead><tbody><tr class="empty"><td colspan="8">대조 실행 후 표시됩니다.</td></tr></tbody>';
+  $('#tModel').innerHTML = '<thead><tr><th>모델 / 품목군</th><th class="num">P/O</th><th class="num">대수 / 수량</th><th class="num">웹등록</th><th class="num">ERP</th><th class="num">웹등록−ERP</th><th class="num">업체</th><th class="num">업체−ERP</th></tr></thead><tbody><tr class="empty"><td colspan="8">대조 실행 후 표시됩니다.</td></tr></tbody>';
   $('#t-ven').innerHTML = '<div class="muted small" style="padding:18px">업체 명세서를 넣고 대조하면 ① 업체에만 있는 행 ② 명세서 내부 점검 ③ 대조 제외 행이 표시됩니다.</div>';
   $('#t-stf').innerHTML = '<div class="muted small" style="padding:18px">대조 후 ① 등록됐지만 ERP에 없는 P/O ② ERP에는 있지만 등록 안 된 P/O가 표시됩니다.</div>';
   $('#poCount').textContent = ''; $('#btnXls').disabled = true; $('#btnClose').disabled = true;
@@ -540,8 +540,8 @@ function renderClose() {
   const r = S.closeRes, s = r.summary, d1 = s.vendorAmt - s.erpAmt, d2 = s.staffAmt - s.erpAmt;
   $('#kpis').innerHTML = `
    <div class="kpi"><div class="l">ERP 매입 · ${esc(r.vendor)} (${esc(s.month)})</div><div class="v">${fmt(s.erpAmt)}</div><div class="d muted">P/O ${s.erpPOs}건</div></div>
-   ${s.hasVendor ? `<div class="kpi"><div class="l">업체 명세서 (선택 시트)</div><div class="v">${fmt(s.vendorAmt)}</div><div class="d ${d1 ? 'diff' : 'muted'}">ERP 대비 ${d1 > 0 ? '+' : ''}${fmt(d1)}</div></div>` : '<div class="kpi"><div class="l">업체 명세서</div><div class="v muted">미사용</div><div class="d muted">ERP ↔ 입고 등록만 대조</div></div>'}
-   <div class="kpi"><div class="l">입고 등록 (ERP P/O 해당분)</div><div class="v">${fmt(s.staffAmt)}</div><div class="d ${d2 ? 'diff' : 'muted'}">P/O ${s.staffPOs}/${s.erpPOs}건 · ERP 대비 ${d2 > 0 ? '+' : ''}${fmt(d2)}</div></div>
+   ${s.hasVendor ? `<div class="kpi"><div class="l">업체 명세서 (선택 시트)</div><div class="v">${fmt(s.vendorAmt)}</div><div class="d ${d1 ? 'diff' : 'muted'}">ERP 대비 ${d1 > 0 ? '+' : ''}${fmt(d1)}</div></div>` : '<div class="kpi"><div class="l">업체 명세서</div><div class="v muted">미사용</div><div class="d muted">ERP ↔ 웹등록만 대조</div></div>'}
+   <div class="kpi"><div class="l">웹등록 (ERP P/O 해당분)</div><div class="v">${fmt(s.staffAmt)}</div><div class="d ${d2 ? 'diff' : 'muted'}">P/O ${s.staffPOs}/${s.erpPOs}건 · ERP 대비 ${d2 > 0 ? '+' : ''}${fmt(d2)}</div></div>
    <div class="kpi ok"><div class="l">일치 P/O (P/O·금액)</div><div class="v">${s.ok}</div><div class="d muted">${s.dateDiff ? `날짜만 다른 P/O ${s.dateDiff}건 포함` : '날짜 차이 없음'}</div></div>
    <div class="kpi warn"><div class="l">확인필요 P/O</div><div class="v">${s.warn}</div><div class="d muted">미등록·모델 표기 등</div></div>
    <div class="kpi bad"><div class="l">불일치 P/O / 업체에만 있는 행</div><div class="v">${s.bad} / ${s.vOnly}</div><div class="d muted">${s.vOnly ? '업체에만 ' + fmt(s.vOnlyAmt) + '원' : ''}</div></div>`;
@@ -556,7 +556,7 @@ function renderPO() {
   const rows = r.rows.filter(x => (!fs || (fs === 'nok' ? x.status !== 'ok' : fs === 'date' ? !!x.dateNote : x.status === fs)) && (!fm || x.model === fm) && (!ft || (x.po + x.staffWhere + x.issues + x.model).toUpperCase().includes(ft)));
   $('#poCount').textContent = `${rows.length} / ${r.rows.length}건`;
   const dc = v => v == null ? '' : `<span class="${v ? 'diff' : ''}">${v > 0 ? '+' : ''}${fmt(v)}</span>`;
-  $('#tPO').innerHTML = PO_HEAD + '<tbody>' + (rows.length ? rows.map(x => `<tr class="${x.status === 'ok' ? '' : x.status}"><td class="c"><span class="tag ${ST[x.status][1]}">${ST[x.status][0]}</span></td><td>${esc(x.model)}</td><td class="nw">${esc(x.po)}</td><td class="nw">${esc(x.date)}</td><td>${x.dateNote ? `<span class="tag t-date">${esc(x.dateNote.replace(/담당/g, '등록'))}</span>` : ''}</td><td class="num">${x.qty == null ? '' : fmt(x.qty)}</td><td class="num">${fmt(x.erpAmt)}</td><td class="num">${fmt(x.staffAmt)}</td><td class="num">${dc(x.staffDiff)}</td><td class="num">${fmt(x.vendorAmt)}</td><td class="num">${dc(x.vendorDiff)}</td><td class="small nw">${esc(x.staffWhere)}</td><td class="small">${esc(x.issues.replace(/담당자 파일 미기재/g, '입고 미등록').replace(/담당자/g, '등록'))}</td></tr>`).join('') : '<tr class="empty"><td colspan="13">조건에 맞는 P/O가 없습니다</td></tr>') + '</tbody>';
+  $('#tPO').innerHTML = PO_HEAD + '<tbody>' + (rows.length ? rows.map(x => `<tr class="${x.status === 'ok' ? '' : x.status}"><td class="c"><span class="tag ${ST[x.status][1]}">${ST[x.status][0]}</span></td><td>${esc(x.model)}</td><td class="nw">${esc(x.po)}</td><td class="nw">${esc(x.date)}</td><td>${x.dateNote ? `<span class="tag t-date">${esc(x.dateNote.replace(/담당/g, '웹등록'))}</span>` : ''}</td><td class="num">${x.qty == null ? '' : fmt(x.qty)}</td><td class="num">${fmt(x.staffAmt)}</td><td class="num">${fmt(x.erpAmt)}</td><td class="num">${dc(x.staffDiff)}</td><td class="num">${fmt(x.vendorAmt)}</td><td class="num">${dc(x.vendorDiff)}</td><td class="small nw">${esc(x.staffWhere)}</td><td class="small">${esc(x.issues.replace(/담당자 파일 미기재/g, '웹 미등록').replace(/담당자/g, '웹등록'))}</td></tr>`).join('') : '<tr class="empty"><td colspan="13">조건에 맞는 P/O가 없습니다</td></tr>') + '</tbody>';
 }
 ['#fStatus', '#fModel'].forEach(id => $(id).onchange = renderPO); $('#fText').oninput = renderPO;
 function renderModel() {
@@ -565,9 +565,9 @@ function renderModel() {
   const dc = v => `<span class="${v ? 'diff' : ''}">${v > 0 ? '+' : ''}${fmt(v)}</span>`;
   const q = x => !x.qty ? '' : x.unit === '대' ? fmt(x.qty) + ' 대' : `${fmt(x.qty)} ${esc((x.unit || '').toLowerCase())}`;
   const hv = S.closeRes.summary.hasVendor;
-  $('#tModel').innerHTML = '<thead><tr><th>모델 / 품목군</th><th class="num">P/O</th><th class="num">대수 / 수량</th><th class="num">ERP</th><th class="num">업체</th><th class="num">업체−ERP</th><th class="num">입고 등록</th><th class="num">등록−ERP</th></tr></thead><tbody>' +
-    b.map(x => `<tr class="${(hv && x.vendor !== x.erp) || x.staff !== x.erp ? 'bad' : ''}"><td>${esc(x.model)}</td><td class="num">${x.pos}</td><td class="num">${q(x)}</td><td class="num">${fmt(x.erp)}</td><td class="num">${hv ? fmt(x.vendor) : ''}</td><td class="num">${hv ? dc(x.vendor - x.erp) : ''}</td><td class="num">${fmt(x.staff)}</td><td class="num">${dc(x.staff - x.erp)}</td></tr>`).join('') +
-    `<tr style="font-weight:700"><td>합계</td><td class="num">${t.pos}</td><td class="num">${fmt(t.qty)} 대</td><td class="num">${fmt(t.erp)}</td><td class="num">${hv ? fmt(t.vendor) : ''}</td><td class="num">${hv ? dc(t.vendor - t.erp) : ''}</td><td class="num">${fmt(t.staff)}</td><td class="num">${dc(t.staff - t.erp)}</td></tr></tbody>`;
+  $('#tModel').innerHTML = '<thead><tr><th>모델 / 품목군</th><th class="num">P/O</th><th class="num">대수 / 수량</th><th class="num">웹등록</th><th class="num">ERP</th><th class="num">웹등록−ERP</th><th class="num">업체</th><th class="num">업체−ERP</th></tr></thead><tbody>' +
+    b.map(x => `<tr class="${(hv && x.vendor !== x.erp) || x.staff !== x.erp ? 'bad' : ''}"><td>${esc(x.model)}</td><td class="num">${x.pos}</td><td class="num">${q(x)}</td><td class="num">${fmt(x.staff)}</td><td class="num">${fmt(x.erp)}</td><td class="num">${dc(x.staff - x.erp)}</td><td class="num">${hv ? fmt(x.vendor) : ''}</td><td class="num">${hv ? dc(x.vendor - x.erp) : ''}</td></tr>`).join('') +
+    `<tr style="font-weight:700"><td>합계</td><td class="num">${t.pos}</td><td class="num">${fmt(t.qty)} 대</td><td class="num">${fmt(t.staff)}</td><td class="num">${fmt(t.erp)}</td><td class="num">${dc(t.staff - t.erp)}</td><td class="num">${hv ? fmt(t.vendor) : ''}</td><td class="num">${hv ? dc(t.vendor - t.erp) : ''}</td></tr></tbody>`;
 }
 function vtable(list, extra) { return list.length ? `<div class="tw" style="max-height:40vh"><table><thead><tr><th>시트</th><th class="num">행</th><th>구분</th><th>품번/모델</th><th>일자</th><th class="num">단가</th><th class="num">수량</th><th class="num">금액</th><th>${extra}</th></tr></thead><tbody>${list.map(v => `<tr><td>${esc(v.sheet)}</td><td class="num">${v.row}</td><td>${esc(v.vkind)}</td><td>${esc(v.code)}</td><td>${esc(v.date || v.rawDate)}</td><td class="num">${fmt(v.price)}</td><td class="num">${fmt(v.qty)}</td><td class="num">${fmt(v.amt)}</td><td class="small">${esc(v.why || v.note || '')}</td></tr>`).join('')}</tbody></table></div>` : '<div class="muted small">해당 없음</div>'; }
 function renderVen() {
@@ -581,15 +581,15 @@ function renderVen() {
 function renderStf() {
   const r = S.closeRes, miss = r.rows.filter(x => !x.staffWhere);
   const st = list => list.length ? `<div class="tw" style="max-height:40vh"><table><thead><tr><th>담당</th><th>P/O No</th><th>입고일</th><th class="num">금액</th></tr></thead><tbody>${list.map(e => `<tr><td>${esc(e.sheet)}</td><td>${esc(e.po)}</td><td>${esc(e.date)}</td><td class="num">${fmt(e.amt)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="muted small">해당 없음</div>';
-  $('#t-stf').innerHTML = `<h3 style="color:var(--bad)">① 입고 등록됐지만 ERP 조회 파일에 없는 P/O — ${r.staffNoERP.length}건</h3><div class="muted small" style="margin-bottom:4px">P/O 오기재이거나 ERP 미입고 처리, 또는 ERP 조회 조건에서 빠진 품목입니다.</div>${st(r.staffNoERP)}
-   <h3 style="color:var(--warn)">② ERP에는 있지만 입고 등록이 안 된 P/O — ${miss.length}건</h3>
+  $('#t-stf').innerHTML = `<h3 style="color:var(--bad)">① 웹등록됐지만 ERP 조회 파일에 없는 P/O — ${r.staffNoERP.length}건</h3><div class="muted small" style="margin-bottom:4px">P/O 오기재이거나 ERP 미입고 처리, 또는 ERP 조회 조건에서 빠진 품목입니다.</div>${st(r.staffNoERP)}
+   <h3 style="color:var(--warn)">② ERP에는 있지만 웹등록이 안 된 P/O — ${miss.length}건</h3>
    ${miss.length ? `<div class="tw" style="max-height:40vh"><table><thead><tr><th>P/O No</th><th>모델</th><th>ERP 입고일</th><th class="num">ERP 금액</th></tr></thead><tbody>${miss.map(x => `<tr><td>${esc(x.po)}</td><td>${esc(x.model)}</td><td>${esc(x.date)}</td><td class="num">${fmt(x.erpAmt)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="muted small">해당 없음</div>'}
    <h3 style="color:var(--mut)">③ 대상월(${esc(r.summary.poPrefix)}…) 외 P/O로 등록된 건 — ${r.staffOther.length}건 (대조 제외)</h3>${st(r.staffOther.map(e => ({ ...e })))}`;
 }
 $('#tabs').onclick = e => { const t = e.target.dataset.t; if (!t) return; $$('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === t)); ['po', 'model', 'ven', 'stf', 'hist'].forEach(k => $('#t-' + k).classList.toggle('hide', k !== t)); };
 async function loadHist() {
   const { data } = await sb.from('pm_closings').select('month,vendor,locked,erp_amt,vendor_amt,staff_amt,ok,warn,bad,date_diff,erp_file,vendor_file,created_by_name,created_at').order('month', { ascending: false }).order('vendor').limit(60);
-  $('#tHist').innerHTML = '<thead><tr><th>마감월</th><th>업체</th><th>상태</th><th class="num">ERP</th><th class="num">업체</th><th class="num">입고 등록</th><th class="num">일치</th><th class="num">확인</th><th class="num">불일치</th><th class="num">날짜차이</th><th>ERP 파일</th><th>업체 파일</th><th>확정자</th><th>일시</th></tr></thead><tbody>' +
+  $('#tHist').innerHTML = '<thead><tr><th>마감월</th><th>업체</th><th>상태</th><th class="num">ERP</th><th class="num">업체</th><th class="num">웹등록</th><th class="num">일치</th><th class="num">확인</th><th class="num">불일치</th><th class="num">날짜차이</th><th>ERP 파일</th><th>업체 파일</th><th>확정자</th><th>일시</th></tr></thead><tbody>' +
     ((data || []).length ? data.map(h => `<tr><td>${esc(h.month)}</td><td>${esc(h.vendor)}</td><td><span class="tag ${h.locked ? 't-bad' : 't-mut'}">${h.locked ? '잠금' : '해제'}</span></td><td class="num">${fmt(h.erp_amt)}</td><td class="num">${fmt(h.vendor_amt)}</td><td class="num">${fmt(h.staff_amt)}</td><td class="num">${h.ok}</td><td class="num">${h.warn}</td><td class="num">${h.bad}</td><td class="num">${h.date_diff}</td><td class="small">${esc(h.erp_file || '')}</td><td class="small">${esc(h.vendor_file || '')}</td><td>${esc(h.created_by_name || '')}</td><td class="small nw">${esc(String(h.created_at).slice(0, 16).replace('T', ' '))}</td></tr>`).join('') : '<tr class="empty"><td colspan="14">마감 이력이 없습니다</td></tr>') + '</tbody>';
 }
 $('#btnClose').onclick = async () => {
@@ -620,12 +620,12 @@ $('#btnXls').onclick = () => {
     return ws;
   }
   const lab = { ok: '일치', warn: '확인필요', bad: '불일치' };
-  const sum = [['ERP 매입 합계', s.erpAmt, `P/O ${s.erpPOs}건`], ['업체 명세서 합계', s.hasVendor ? s.vendorAmt : '미사용', s.hasVendor ? `ERP 대비 ${fmt(s.vendorAmt - s.erpAmt)}` : ''], ['입고 등록 합계(ERP P/O 해당분)', s.staffAmt, `P/O ${s.staffPOs}건 · ERP 대비 ${fmt(s.staffAmt - s.erpAmt)}`], ['일치 P/O', s.ok, `날짜만 다른 P/O ${s.dateDiff}건 포함`], ['확인필요 P/O', s.warn, ''], ['불일치 P/O', s.bad, ''], ['업체 명세서에만 있는 행', s.vOnly, ''], ['ERP에 없는 등록 P/O', s.staffNoERP, ''], [], ['ERP 파일', C.erpName, ''], ['업체 파일', s.hasVendor ? C.venName : '', C.sel.join(', ')], ['작성', S.prof.name + ' · ' + new Date().toLocaleString('ko-KR'), '']];
+  const sum = [['ERP 매입 합계', s.erpAmt, `P/O ${s.erpPOs}건`], ['업체 명세서 합계', s.hasVendor ? s.vendorAmt : '미사용', s.hasVendor ? `ERP 대비 ${fmt(s.vendorAmt - s.erpAmt)}` : ''], ['웹등록 합계(ERP P/O 해당분)', s.staffAmt, `P/O ${s.staffPOs}건 · ERP 대비 ${fmt(s.staffAmt - s.erpAmt)}`], ['일치 P/O', s.ok, `날짜만 다른 P/O ${s.dateDiff}건 포함`], ['확인필요 P/O', s.warn, ''], ['불일치 P/O', s.bad, ''], ['업체 명세서에만 있는 행', s.vOnly, ''], ['ERP에 없는 등록 P/O', s.staffNoERP, ''], [], ['ERP 파일', C.erpName, ''], ['업체 파일', s.hasVendor ? C.venName : '', C.sel.join(', ')], ['작성', S.prof.name + ' · ' + new Date().toLocaleString('ko-KR'), '']];
   XLSX.utils.book_append_sheet(wb, sheet(`${r.vendor} 월마감 입고 대사 — ${s.month}`, ['항목', '값', '비고'], sum, [32, 22, 60], [1]), '요약');
-  const po = r.rows.map(x => { const a = [lab[x.status], x.model, x.po, x.date, x.dateNote, x.qty, x.erpAmt, x.staffAmt, x.staffDiff, x.vendorAmt, x.vendorDiff, x.staffWhere, x.issues]; a.__st = x.status; return a; });
-  XLSX.utils.book_append_sheet(wb, sheet(`P/O별 대조 — ${s.month}`, ['상태', '모델', 'P/O No', 'ERP 입고일', '날짜 차이', '대수/수량', 'ERP 금액', '등록 금액', '등록−ERP', '업체 금액', '업체−ERP', '등록 담당', '확인 내용'], po, [9, 24, 13, 11, 18, 9, 14, 14, 11, 14, 11, 12, 46], [5, 6, 7, 8, 9, 10]), 'PO별대조');
-  const bm = r.byModel.map(x => { const a = [x.model, x.pos, x.qty || null, x.unit || '', x.erp, s.hasVendor ? x.vendor : null, s.hasVendor ? x.vendor - x.erp : null, x.staff, x.staff - x.erp]; a.__st = (s.hasVendor && x.vendor !== x.erp) || x.staff !== x.erp ? 'bad' : 'ok'; return a; });
-  XLSX.utils.book_append_sheet(wb, sheet('모델·품목군별 소계', ['모델/품목군', 'P/O', '대수/수량', '단위', 'ERP', '업체', '업체−ERP', '입고 등록', '등록−ERP'], bm, [24, 6, 10, 6, 16, 16, 12, 16, 12], [1, 2, 4, 5, 6, 7, 8]), '모델별');
+  const po = r.rows.map(x => { const a = [lab[x.status], x.model, x.po, x.date, x.dateNote, x.qty, x.staffAmt, x.erpAmt, x.staffDiff, x.vendorAmt, x.vendorDiff, x.staffWhere, x.issues.replace(/담당자 파일 미기재/g, '웹 미등록').replace(/담당자/g, '웹등록')]; a.__st = x.status; return a; });
+  XLSX.utils.book_append_sheet(wb, sheet(`P/O별 대조 — ${s.month}`, ['상태', '모델', 'P/O No', 'ERP 입고일', '날짜 차이', '대수/수량', '웹등록', 'ERP 금액', '웹등록−ERP', '업체 금액', '업체−ERP', '웹등록 담당', '확인 내용'], po, [9, 24, 13, 11, 18, 9, 14, 14, 11, 14, 11, 12, 46], [5, 6, 7, 8, 9, 10]), 'PO별대조');
+  const bm = r.byModel.map(x => { const a = [x.model, x.pos, x.qty || null, x.unit || '', x.staff, x.erp, x.staff - x.erp, s.hasVendor ? x.vendor : null, s.hasVendor ? x.vendor - x.erp : null]; a.__st = (s.hasVendor && x.vendor !== x.erp) || x.staff !== x.erp ? 'bad' : 'ok'; return a; });
+  XLSX.utils.book_append_sheet(wb, sheet('모델·품목군별 소계', ['모델/품목군', 'P/O', '대수/수량', '단위', '웹등록', 'ERP', '웹등록−ERP', '업체', '업체−ERP'], bm, [24, 6, 10, 6, 16, 16, 12, 16, 12], [1, 2, 4, 5, 6, 7, 8]), '모델별');
   XLSX.writeFile(wb, `입고대사_${r.vendor}_${s.month}.xlsx`);
 };
 
